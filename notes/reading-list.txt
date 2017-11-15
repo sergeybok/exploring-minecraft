@@ -1,0 +1,18 @@
+Sergey:
+Hashing Over Predicted Future Frames for Informed Exploration of Deep RL
+VIME
+Surprise-based intrinsice motivation for deep RL
+(tentative) Automatic Goal Generation for Reinforcement Learning Agents
+
+Manav:
+Minecraft Paper
+Deep Exploration via Bootstrapped DQN
+Incentivizing exploration in reinforcement learning with deep predictive models
+
+
+Later:
+Graves' paper on neural computer w/ external memory
+
+
+
+
