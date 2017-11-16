@@ -1,0 +1,15 @@
+This idea is developed in the Hashing over Predicted Frames paper
+
+However the main idea is the same:
+Instead of doing e-greedy action-space exploration or gaussian exploration
+A better way of doing exploration is exploring areas of the action space that
+the model cannot predict with high accuracy. If you can't predict it that means
+you don't know much about it, thus it is a worth sub-space to explore
+
+Uses Baye's Theorem with Bayesian NN, the other paper uses Conv NN though.
+
+
+
+
+
+
