@@ -8,6 +8,8 @@ Manav:
 Minecraft Paper
 Deep Exploration via Bootstrapped DQN
 Incentivizing exploration in reinforcement learning with deep predictive models
+First experiments with PowerPlay
+
 
 
 Later:
