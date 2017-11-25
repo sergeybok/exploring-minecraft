@@ -1,0 +1,14 @@
+Essentially does the same thing as VIME, except in a much more complex way.
+What they do is they use a CNN on the raw pixel input (state) to create feature vector, combine it with an action and transform it and run it through a deconvolutional network which outputs the predicted next frame.
+Then it also has an interesting method of hashing over these image frames (sec 3.2.2)
+which uses an unsupervised auto-encoder trained separately (not necessarily separately but it's not part of the actual agent network).
+This hashing method is then used to keep track of how many times a certain frame (a certain state) has been seen. And it rewards the agent for encountering states which it cannot predict very well.
+
+Note: they use a DQN agent, and they test on Atari games
+
+
+Takeaways: This paper attempts to improve a RL agent's state space exploration by an agent by creating a clever way of realizing when they are experiencing
+a new part of the state space, and a clever way of assigning reward for
+doing actions that lead to those areas of the state space.
+
+
