@@ -1,0 +1,29 @@
+
+Compares their results to VIME, and claims to get similar performance
+with less computational cost.
+
+Basic idea is that we have transition state probability function P:SxAxS
+Which has probability P(s_t|a_t-1,s_t-1)
+While training, we are also learning a function P*:SxAxS which is meant
+to be the same probability function as the above P
+We express suprise the as either log(P(s|a',s')-log(P*(s|a',s'), or KL(P||P*), and use it to reward the agent based on surprise.
+
+They use TRPO.
+
+Not sure what to do when no specific P function given (they seem to take it
+for granted) and not sure if such functions P and P* would work very well
+with raw pixel inputs.
+
+
+Takeaways: I think this is a great idea, much simpler than VIME, however as
+I said just above, not sure if works in our environment.
+
+
+
+
+
+
+
+
+
+
