@@ -1,0 +1,68 @@
+1. 
+git clone https://github.com/Microsoft/malmo-challenge
+cd malmo-challenge
+pip install -e .
+
+2. brew install boost --with-python 
+
+3. brew install boost-python ffmpeg xerces-c mono 
+
+4. sudo brew cask install java
+This doesn't work as can't use sudo for brew
+
+5. export MALMO_XSD_PATH=/Users/manavchoudhary/USI/1sem/Deep_Learning_Lab/DL_Lab_project/malmo/Malmo-0.30.0-Mac-64bit_withBoost/Schemas
+
+6. export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.8.0_152.jdk/Contents/Home
+
+7. cd Malmo-0.30.0-Mac-64bit_withBoost/Minecraft
+   ./launchClient.sh
+
+8. cd Malmo-0.30.0-Mac-64bit_withBoost/Python_Examples
+   /usr/bin/python run_mission.py
+
+9. Library not loaded: /usr/local/opt/xerces-c/lib/libxerces-c-3.1.dylib
+
+    From the website ::::
+    https://archive.apache.org/dist/xerces/c/3/sources/
+
+    I downloaded the file, :: xerces-c-3.1.4.zip, then unzip in the project directory or wherever
+    then in the unzipped directory, do the following::::
+
+    ./configure
+    make
+    make install
+
+    I guess this installs the xerces 3.1 version, because after this the run_mission.py works
+    but the /usr/local/opt/xerces-c/lib/ directory still doesn't have any file named libxerces-c-3.1.dylib, though somehow it works now.
+
+10.  cd Minecraft
+     ./launchClient.sh
+
+11.   cd Python_Examples
+      python run_mission.py
+
+12. Installing OpenCV
+     brew install opencv
+     echo /usr/local/opt/opencv/lib/python2.7/site-packages >> /usr/local/lib/python2.7/site-packages/opencv2.pth
+
+     Do::::
+      ---- Go to the site-packages directory of the default system python----
+     cd  /usr/local/lib/python2.7/site-packages/
+     rm cv2.so
+     sudo ln -s /usr/local/opt/opencv/lib/python2.7/site-packages/cv2.so cv2.so
+
+
+	The following method doesn't work and gives the error "ImportError: numpy.core.multiarray failed to import"
+      ---- Go to the site-packages directory of the default system python----
+      ---- To find the directory where the opencv got installed by brew, use 'ls' on the /usr/local/opt/opencv directory
+      ---- To find the directory where the site-packages of default python is located use the instruction #13.------
+      cd '/Library/Python/2.7/site-packages/'
+      sudo ln -s /usr/local/opt/opencv/lib/python2.7/site-packages/cv2.so cv2.so
+
+13. Finding the 'site-packages' folder of the default python of Mac OS sierra:
+	/usr/bin/python (opens the interactive interpreter)
+	 import sys
+	print sys.path
+	['', '/Library/Python/2.7/site-packages/pip-9.0.1-py2.7.egg', '..................]
+
+	So the path is '/Library/Python/2.7/site-packages/'

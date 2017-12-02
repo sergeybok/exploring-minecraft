@@ -20,12 +20,14 @@ from __future__ import print_function
 
 # Tutorial sample #2: Run simple mission using raw XML
 
-from builtins import range
+#from builtins import range
 import MalmoPython
 import os
 import sys
 import time
 import random
+import json
+import numpy as np
 
 import cv2
 
@@ -36,6 +38,9 @@ else:
     print = functools.partial(print, flush=True)
 
 # More interesting generator string: "3;7,44*49,73,35:1,159:4,95:13,35:13,159:11,95:10,159:14,159:6,35:6,95:6;12;"
+
+video_width = 432
+video_height = 240
 
 missionXML='''<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
             <Mission xmlns="http://ProjectMalmo.microsoft.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
@@ -53,7 +58,7 @@ missionXML='''<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
 
                 <ServerHandlers>
                   <DefaultWorldGenerator />
-                  <ServerQuitFromTimeUp timeLimitMs="100000"/>
+                  <ServerQuitFromTimeUp timeLimitMs="5000"/>
                   <ServerQuitWhenAnyAgentFinishes/>
                 </ServerHandlers>
               </ServerSection>
@@ -62,6 +67,10 @@ missionXML='''<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
                 <Name>MalmoTutorialBot</Name>
                 <AgentStart/>
                 <AgentHandlers>
+                    <VideoProducer want_depth="true">
+                        <Width>''' + str(video_width) + '''</Width>
+                        <Height>''' + str(video_height) + '''</Height>
+                    </VideoProducer>
                   <ObservationFromFullStats/>
                   <ContinuousMovementCommands turnSpeedDegs="180"/>
                 </AgentHandlers>
@@ -150,21 +159,24 @@ while world_state.is_mission_running:
       time.sleep(0.05)
       world_state = agent_host.getWorldState()
       agent_host.sendCommand(random.choice(action_space))
+      print('The length of video frames is' + str(len(world_state.video_frames)))
       continue
+
+    print('After the continue statement the length of video frames is'+str(len(world_state.video_frames)))
 
     i+=1
     print(".", end="")
     time.sleep(0.1)
     world_state = agent_host.getWorldState()
     #print(world_state.__dict__)
-    #msg = world_state.observations[-1].text
-    #ob = json.loads(msg)
+    msg = world_state.observations[-1].text
+    curr_observation = json.loads(msg)
     if i % 20 == 0:
       frame = world_state.video_frames[0]
       img = np.array(cv2.imdecode((frame.pixels), cv2.CV_LOAD_IMAGE_COLOR))
       cv2.imwrite('{0}frame_{1}.jpg'.format(frame_dir,i),im)
 
-    print(msg)
+    print(curr_observation)
     print('')
     for error in world_state.errors:
         print("Error:",error.text)
