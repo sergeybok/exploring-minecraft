@@ -1,8 +1,8 @@
 Sergey:
-Hashing Over Predicted Future Frames for Informed Exploration of Deep RL
-VIME
+v Hashing Over Predicted Future Frames for Informed Exploration of Deep RL
+v VIME
 Surprise-based intrinsice motivation for deep RL
-(tentative) Automatic Goal Generation for Reinforcement Learning Agents
+v Automatic Goal Generation for Reinforcement Learning Agents
 
 Manav:
 Minecraft Paper
