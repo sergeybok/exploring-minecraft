@@ -154,7 +154,11 @@ class TabQAgent:
                     world_state = agent_host.getWorldState()
                     for error in world_state.errors:
                         self.logger.error("Error: %s" % error.text)
+
+                    # print(world_state.rewards)
                     for reward in world_state.rewards:
+                        # print('First action Length rewards ' + str(len(world_state.rewards)))
+                        # print(reward.getValue())
                         current_r += reward.getValue()
                     if world_state.is_mission_running and len(world_state.observations)>0 and not world_state.observations[-1].text=="{}":
                         total_reward += self.act(world_state, agent_host, current_r)
@@ -169,15 +173,39 @@ class TabQAgent:
                     world_state = agent_host.getWorldState()
                     for error in world_state.errors:
                         self.logger.error("Error: %s" % error.text)
+
                     for reward in world_state.rewards:
                         current_r += reward.getValue()
+
+                    #TODO Reward debugging information:::
+                    #TODO The problem is in that the environment doesn't keep all rewards even with the MalmoPython.RewardsPolicy.KEEP_ALL_REWARDS policy
+                    '''
+                    for reward in world_state.rewards:
+                        i = 0
+                        while(reward.hasValueOnDimension(i)):
+                            print(reward.getValueOnDimension(i))
+                            i += 1
+                        print('The final non zeros dimension is '+str(i))
+
+                    for reward in world_state.rewards:
+                        print('Waiting non-zero reward Length rewards is ' + str(len(world_state.rewards)))
+                        print(reward.getValue())
+                        print(reward.getValue)
+                        # print(reward.values)
+                        # print(world_state.rewards.values)
+                        print(world_state.rewards)
+                    #'''
                 # allow time to stabilise after action
                 while True:
                     time.sleep(0.1)
                     world_state = agent_host.getWorldState()
                     for error in world_state.errors:
                         self.logger.error("Error: %s" % error.text)
+
+                    # print(world_state.rewards)
                     for reward in world_state.rewards:
+                        # print('stabilizing after action Length rewards is ' + str(len(world_state.rewards)))
+                        # print(reward.getValue())
                         current_r += reward.getValue()
                     if world_state.is_mission_running and len(world_state.observations)>0 and not world_state.observations[-1].text=="{}":
                         total_reward += self.act(world_state, agent_host, current_r)
@@ -243,6 +271,11 @@ sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)  # flush print output immedi
 
 agent = TabQAgent()
 agent_host = MalmoPython.AgentHost()
+
+agent_host.setRewardsPolicy(MalmoPython.RewardsPolicy.KEEP_ALL_REWARDS)
+# agent_host.setRewardsPolicy(MalmoPython.RewardsPolicy.SUM_REWARDS)
+# agent_host.setRewardsPolicy(MalmoPython.RewardsPolicy.LATEST_REWARD_ONLY)
+
 try:
     agent_host.parse( sys.argv )
 except RuntimeError as e:
