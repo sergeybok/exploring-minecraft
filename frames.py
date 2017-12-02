@@ -29,7 +29,7 @@ import random
 import json
 import numpy as np
 
-from PIL import Image 
+#from PIL import Image 
 
 if sys.version_info[0] == 2:
     sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)  # flush print output immediately
@@ -156,6 +156,7 @@ if not os.path.exists(frame_dir):
 
 # Loop until mission ends:
 i = 0
+img = None
 while world_state.is_mission_running:
     if len(world_state.video_frames) == 0:
       time.sleep(0.05)
@@ -176,9 +177,13 @@ while world_state.is_mission_running:
     if i < 50:
       frame = world_state.video_frames[0]
       #print('frame type {0}'.format(type(frame.pixels)))
-      
-      img = (Image.frombytes('RGBA', (frame.width, frame.height), str(frame.pixels),decoder_name='raw')).convert('RGB')
-      img.save('{0}frame_{1}.png'.format(frame_dir,i),format='png')
+
+      img = np.frombuffer(frame.pixels, dtype=np.uint8)
+      img = img.reshape((frame.height,frame.width,4))
+      img = img[:,:,0:3]
+
+      #img = (Image.frombytes('RGBA', (frame.width, frame.height), str(frame.pixels),decoder_name='raw')).convert('RGB')
+      #img.save('{0}frame_{1}.png'.format(frame_dir,i),format='png')
       
 
     #print(curr_observation)
