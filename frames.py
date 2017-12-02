@@ -29,7 +29,7 @@ import random
 import json
 import numpy as np
 
-import cv2
+from PIL import Image 
 
 if sys.version_info[0] == 2:
     sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)  # flush print output immediately
@@ -58,7 +58,7 @@ missionXML='''<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
 
                 <ServerHandlers>
                   <DefaultWorldGenerator />
-                  <ServerQuitFromTimeUp timeLimitMs="5000"/>
+                  <ServerQuitFromTimeUp timeLimitMs="9000"/>
                   <ServerQuitWhenAnyAgentFinishes/>
                 </ServerHandlers>
               </ServerSection>
@@ -91,7 +91,7 @@ if agent_host.receivedArgument("help"):
     exit(0)
 
 
-agent_host.setVideoPolicy(MalmoPython.VideoPolicy.KEEP_ALL_FRAMES)
+agent_host.setVideoPolicy(MalmoPython.VideoPolicy.LATEST_FRAME_ONLY)
 
 my_mission = MalmoPython.MissionSpec(missionXML, True)
 my_mission_record = MalmoPython.MissionRecordSpec()
@@ -124,11 +124,13 @@ print("Mission running ", end=' ')
 
 action_space = ['move 1',
                 'move -1',
+                'move 0',
                 'strafe -1',
                 'strafe 1',
-                'pitch 0.1'
-                'pitch -0.1'
-                'pitch 0'
+                'strafe 0',
+                'pitch 0.1',
+                'pitch -0.1',
+                'pitch 0',
                 'turn 1',
                 'turn -1',
                 'turn 0',
@@ -159,25 +161,27 @@ while world_state.is_mission_running:
       time.sleep(0.05)
       world_state = agent_host.getWorldState()
       agent_host.sendCommand(random.choice(action_space))
-      print('The length of video frames is' + str(len(world_state.video_frames)))
+      #print('The length of video frames is' + str(len(world_state.video_frames)))
       continue
 
-    print('After the continue statement the length of video frames is'+str(len(world_state.video_frames)))
+    #print('After the continue statement the length of video frames is'+str(len(world_state.video_frames)))
 
     i+=1
     print(".", end="")
     time.sleep(0.1)
     world_state = agent_host.getWorldState()
     #print(world_state.__dict__)
-    msg = world_state.observations[-1].text
-    curr_observation = json.loads(msg)
-    if i % 20 == 0:
+    #msg = world_state.observations[-1].text
+    #curr_observation = json.loads(msg)
+    if i < 50:
       frame = world_state.video_frames[0]
-      img = np.array(cv2.imdecode((frame.pixels), cv2.CV_LOAD_IMAGE_COLOR))
-      cv2.imwrite('{0}frame_{1}.jpg'.format(frame_dir,i),im)
+      #print('frame type {0}'.format(type(frame.pixels)))
+      
+      img = (Image.frombytes('RGBA', (frame.width, frame.height), str(frame.pixels),decoder_name='raw')).convert('RGB')
+      img.save('{0}frame_{1}.png'.format(frame_dir,i),format='png')
+      
 
-    print(curr_observation)
-    print('')
+    #print(curr_observation)
     for error in world_state.errors:
         print("Error:",error.text)
     agent_host.sendCommand(random.choice(action_space))
