@@ -246,7 +246,7 @@ class A3C:
 
         self.value_loss = 0.5 * tf.reduce_sum(tf.square(self.target_v - tf.reshape(self.value,[-1])),name='value_loss')
         self.entropy = - tf.reduce_sum(self.policy * tf.log(self.policy),name='entropy_loss')
-        self.policy_loss = -tf.reduce_sum(tf.log(self.responsible_outputs)*self.advantages,name='policy_loss')
+        self.policy_loss = tf.abs(tf.reduce_sum(tf.log(self.responsible_outputs)*self.advantages,name='policy_loss'))
         self.loss = 0.5 * self.value_loss + self.policy_loss - self.entropy * 0.01
 
         optimizer = tf.train.AdamOptimizer(learning_rate)
@@ -401,7 +401,7 @@ class A3C:
             self.saver.save(self.sess,'maze_models/maze_ep_{0}.cpkt'.format(self.episode_count))
 
 
-        print('episode {0}, value loss = {0} | policy = {0} | entropy = {0}'.format(self.episode_count,v_l,p_l,e_l))
+        print('episode {0}, value loss = {1} | policy = {2} | entropy = {3}'.format(self.episode_count,v_l,p_l,e_l))
 
 
 
