@@ -12,22 +12,32 @@ class environment():
     def __init__(self):
         self.maze4 = '''
             <MazeDecorator>
-                <SizeAndPosition length="60" width="60" yOrigin="225" zOrigin="0" height="180"/>
-                <GapProbability variance="0.4">0.5</GapProbability>
-                <Seed>random</Seed>
-                <MaterialSeed>random</MaterialSeed>
+                <SizeAndPosition length="10" width="10" yOrigin="225" zOrigin="0" height="180"/>
+                <GapProbability variance="0.4">0.4</GapProbability>
+                <Seed>123</Seed>
+                <MaterialSeed>124</MaterialSeed>
                 <AllowDiagonalMovement>false</AllowDiagonalMovement>
                 <StartBlock fixedToEdge="true" type="emerald_block" height="1"/>
                 <EndBlock fixedToEdge="true" type="redstone_block" height="12"/>
-                <PathBlock type="stone dirt stained_hardened_clay" colour="WHITE ORANGE MAGENTA LIGHT_BLUE YELLOW LIME PINK GRAY SILVER CYAN PURPLE BLUE BROWN GREEN RED BLACK" height="1"/>
+                <PathBlock type="dirt" height="1"/>
                 <FloorBlock type="stone" variant="smooth_granite"/>
-                <SubgoalBlock type="beacon sea_lantern glowstone"/>
-                <OptimalPathBlock type="stone" variant="smooth_granite andesite smooth_diorite diorite"/>
-                <GapBlock type="lapis_ore stained_hardened_clay air" colour="WHITE ORANGE MAGENTA LIGHT_BLUE YELLOW LIME PINK GRAY SILVER CYAN PURPLE BLUE BROWN GREEN RED BLACK" height="3" heightVariance="3"/>
+                <SubgoalBlock type="glowstone"/>
+                <OptimalPathBlock type="stone" variant="smooth_diorite"/>
+                <GapBlock type="dirt" height="1"/>
                 <AddQuitProducer description="finished maze"/>
                 <AddNavigationObservations/>
             </MazeDecorator>
         '''
+
+        #TODO: to make it easier for the agent i have now defined the gap block as dirt, therefore basically there are no gaps
+        #TODO: in a more advanced version we will use air as the gap block in this version the agent will have to take the 'jump' action to get out of the vacant hole (i.e air gap block)
+
+        #NOTE:::: OptimalPathBlock is the optimal path hints to the final goal, these are the stones which connect the starting position to the final goal positions via the subgoals
+        #SubgoalBlock are the stones which define the sub goals along the way to the final goal
+        #GapProbability takes value between 0 and 2, not from 0 to 1. It is the probability of having a 'gap'/hole in the elevated waliking area, it not only changes the total number of availabale blocks to walk on,
+        #GapProbability also changes the optimal path to the final goal. For value 0.0 there are no gaps in the walking area, but the agent does not follow the given optimal path which is two perpendicular paths
+        #but instead walks in a diagonal shortest path to the goal. For value 2.0 there are no walking blocks except for the optimal path, i.e the floor is all empty but for the optimal path and the optimal path
+        #is a straight line to the final goal and the agent follows this optimal path. The gap block doesn't necessarily have to be air, it can be defined as lapis_ore or anything else as well.
 
         self.video_width = 432
         self.video_height = 240
@@ -193,6 +203,11 @@ class environment():
 
             <ServerSection>
                 <ServerInitialConditions>
+                    <Time>
+                        <StartTime>1000</StartTime>
+                        <AllowPassageOfTime>false</AllowPassageOfTime>
+                    </Time>
+                    <Weather>clear</Weather>
                     <AllowSpawning>false</AllowSpawning>
                 </ServerInitialConditions>
                 <ServerHandlers>
@@ -215,7 +230,7 @@ class environment():
                     </VideoProducer>
                     <RewardForTouchingBlockType>
                         <Block reward="100.0" type="redstone_block" behaviour="onceOnly"/>
-                        </RewardForTouchingBlockType>
+                    </RewardForTouchingBlockType>
                     <RewardForSendingCommand reward="-1"/>
                     <ContinuousMovementCommands turnSpeedDegs="840">
                         <ModifierList type="deny-list"> <!-- Example deny-list: prevent agent from strafing -->
