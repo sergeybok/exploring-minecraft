@@ -1,4 +1,3 @@
-import tensorflow as tf
 import MalmoPython
 import numpy as np
 import os
@@ -32,6 +31,7 @@ class environment():
 
         self.video_width = 432
         self.video_height = 240
+        self.video_channels = 3
         self.validate = True
 
         self.agent_host = MalmoPython.AgentHost()
@@ -62,13 +62,16 @@ class environment():
         self.mazeblocks = [self.maze4]
         self.curr_episode_num = 0
 
+        self.action_dict = {0:'move 0.3', 1:'move 0', 2:'move -0.3', 3:'turn 0.3', 4:'turn 0', 5:'turn -0.3'}
+        self.total_num_actions = len(self.action_dict)
+
 
     def get_maze(self):
         # Set up a recording
         self.my_mission_record = MalmoPython.MissionRecordSpec()
         self.my_mission_record.recordRewards()
         self.my_mission_record.recordObservations()
-        #TODO Figure out a way to increase the curr_episode_num and hence change the my_mission_record????
+        #TODO :: done Figure out a way to increase the curr_episode_num and hence change the my_mission_record????
         self.my_mission_record.setDestination(self.recordingsDirectory + "//" + "Mission_" + str(self.curr_episode_num) + ".tgz")
 
         self.mazeblock = random.choice(self.mazeblocks)
@@ -118,14 +121,14 @@ class environment():
                 try:
                     #TODO figure out a way to convert the passed action into a command like "move 0.5" etc.
                     #TODO i can use a dictionary for this like {0: 'move 0.5', 1: 'turn 0.5'} etc.
-                    self.agent_host.sendCommand(action)
+                    self.agent_host.sendCommand(self.action_dict[action])
                     # self.agent_host.sendCommand("move " + str(current_speed))
                     # self.agent_host.sendCommand("turn " + str(current_yaw_delta))
                 except RuntimeError as e:
                     print("Failed to send command:", e)
                     pass
             self.world_state = self.agent_host.getWorldState()
-            #TODO define the value of next_state and next_reward
+            #TODO :: done define the value of next_state and next_reward
             frame = self.world_state.video_frames[0]
             image_pixels = np.frombuffer(frame.pixels, dtype=np.uint8)
             image_pixels = image_pixels.reshape((frame.height, frame.width, 4))
@@ -176,6 +179,7 @@ class environment():
         current_state = image_pixels
         return current_state
 
+    #TODO :: fix the reward definition at the end of maze i.e touching the redstone properly
     def GetMissionXML(self, mazeblock):
         return '''<?xml version="1.0" encoding="UTF-8" ?>
         <Mission xmlns="http://ProjectMalmo.microsoft.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
@@ -209,6 +213,10 @@ class environment():
                             <Width>''' + str(self.video_width) + '''</Width>
                             <Height>''' + str(self.video_height) + '''</Height>
                     </VideoProducer>
+                    <RewardForTouchingBlockType>
+                        <Block reward="100.0" type="redstone_block" behaviour="onceOnly"/>
+                        </RewardForTouchingBlockType>
+                    <RewardForSendingCommand reward="-1"/>
                     <ContinuousMovementCommands turnSpeedDegs="840">
                         <ModifierList type="deny-list"> <!-- Example deny-list: prevent agent from strafing -->
                             <command>strafe</command>
@@ -218,3 +226,31 @@ class environment():
             </AgentSection>
 
         </Mission>'''
+
+
+def testing_function():
+    maze_env = environment()
+    maze_env.get_maze()
+
+    s = maze_env.get_current_state()
+    print('Current state is ')
+    print(s)
+
+    a = 0
+    s1, r, is_terminal_flag = maze_env.take_action(a)
+    print('Next state is ')
+    print(s1)
+    print('Current reward is '+str(r))
+    print('Terminal flag is '+str(is_terminal_flag))
+
+    for i  in range(50):
+        a = np.random.choice(list(maze_env.action_dict.keys()))
+        s1, r, is_terminal_flag = maze_env.take_action(a)
+        print('Next state is ')
+        print(s1)
+        print('Current reward is '+str(r))
+        print('Terminal flag is '+str(is_terminal_flag))
+        print('-'*80)
+
+if(__name__=='__main__'):
+    testing_function()
