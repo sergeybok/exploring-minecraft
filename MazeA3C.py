@@ -32,6 +32,8 @@ from tensorflow.contrib import slim
 import scipy
 import numpy as np 
 
+from threading import Thread, Lock
+
 
 learning_rate = 1e-3
 
@@ -419,7 +421,7 @@ else:
 validate = True
 #mazeblocks = [maze1, maze2, maze3, maze4]
 
-mazeblocks = [maze1]
+mazeblocks = [maze2]
 
 
 agent_host = MalmoPython.AgentHost()
