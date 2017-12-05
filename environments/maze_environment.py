@@ -58,6 +58,7 @@ class environment():
 
         self.agent_host.setObservationsPolicy(MalmoPython.ObservationsPolicy.LATEST_OBSERVATION_ONLY)
         self.agent_host.setVideoPolicy(MalmoPython.VideoPolicy.LATEST_FRAME_ONLY)
+        self.agent_host.setRewardsPolicy(MalmoPython.RewardsPolicy.KEEP_ALL_REWARDS)
 
         self.recordingsDirectory = "MazeRecordings"
         self.TICK_LENGTH = self.agent_host.getIntArgument("speed")
@@ -132,6 +133,11 @@ class environment():
                     #TODO figure out a way to convert the passed action into a command like "move 0.5" etc.
                     #TODO i can use a dictionary for this like {0: 'move 0.5', 1: 'turn 0.5'} etc.
                     self.agent_host.sendCommand(self.action_dict[action])
+                    world_state = self.agent_host.getWorldState()
+                    current_reward = 0
+                    for reward in world_state.rewards:
+                        current_reward += reward.getValue()
+                    # print(str(current_reward))
                     # self.agent_host.sendCommand("move " + str(current_speed))
                     # self.agent_host.sendCommand("turn " + str(current_yaw_delta))
                 except RuntimeError as e:
@@ -148,9 +154,6 @@ class environment():
             image_pixels = image_pixels.flatten()
             next_state = image_pixels
 
-            current_reward = 0
-            for reward in self.world_state.rewards:
-                current_reward += reward.getValue()
             is_terminal_flag = False
             return (next_state, current_reward, is_terminal_flag)
         else:
@@ -190,7 +193,13 @@ class environment():
         return current_state
 
     #TODO :: fix the reward definition at the end of maze i.e touching the redstone properly
+    #TODO :: maybe give a small negative reward for sending commands, i.e for taking any action at all
     def GetMissionXML(self, mazeblock):
+        #NOTE ::: reward for reaching a position is defined as follows:
+        # <RewardForReachingPosition dimension="0">
+        #    <Marker oneshot="true" reward="100" tolerance="1.1" x="19.5" y="0" z="19.5"/>
+        # </RewardForReachingPosition>
+
         return '''<?xml version="1.0" encoding="UTF-8" ?>
         <Mission xmlns="http://ProjectMalmo.microsoft.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
             <About>
@@ -230,6 +239,8 @@ class environment():
                     </VideoProducer>
                     <RewardForTouchingBlockType>
                         <Block reward="100.0" type="redstone_block" behaviour="onceOnly"/>
+                        <Block reward="20.0" type="glowstone" behaviour="onceOnly"/>
+                        <Block reward="10.0" type="stone" variant="smooth_diorite" behaviour="onceOnly"/>
                     </RewardForTouchingBlockType>
                     <RewardForSendingCommand reward="-1"/>
                     <ContinuousMovementCommands turnSpeedDegs="840">
@@ -269,3 +280,29 @@ def testing_function():
 
 if(__name__=='__main__'):
     testing_function()
+
+
+#NOTE ::: The mission XML can also be generated programmatically as following:
+# my_mission = MalmoPython.MissionSpec()
+# my_mission.setSummary('A sample mission - run onto the gold block')
+# my_mission.requestVideo( 640, 480 )
+# my_mission.timeLimitInSeconds( 30 )
+# my_mission.allowAllChatCommands()
+# my_mission.allowAllInventoryCommands()
+# my_mission.setTimeOfDay( 1000, False )
+# my_mission.observeChat()
+# my_mission.observeGrid( -1, -1, -1, 1, 1, 1, 'grid' )
+# my_mission.observeHotBar()
+# my_mission.drawBlock( 5, 226, 5, 'gold_block' )
+# my_mission.rewardForReachingPosition( 5.5, 227, 5.5, 100, 0.5 )
+# my_mission.endAt( 5.5, 227, 5.5, 0.5 )
+# my_mission.startAt( 0.5, 227, 0.5 )
+# if rep % 2 == 1:  # alternate between continuous and discrete missions, for fun
+#     my_mission.removeAllCommandHandlers()
+#     my_mission.allowAllDiscreteMovementCommands()
+#
+# my_mission_record = MalmoPython.MissionRecordSpec('./hac_saved_mission_' + str(rep) + '.tgz')
+# my_mission_record.recordCommands()
+# my_mission_record.recordMP4(20, 400000)
+# my_mission_record.recordRewards()
+# my_mission_record.recordObservations()
