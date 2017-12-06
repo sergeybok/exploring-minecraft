@@ -66,3 +66,9 @@ This doesn't work as can't use sudo for brew
 	['', '/Library/Python/2.7/site-packages/pip-9.0.1-py2.7.egg', '..................]
 
 	So the path is '/Library/Python/2.7/site-packages/'
+
+14. To install xerces in a specified directory instead of the default directory, do the following:::
+
+	./configure --prefix=/..../..../..../
+	make
+	make install
