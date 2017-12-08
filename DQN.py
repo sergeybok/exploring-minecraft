@@ -253,6 +253,5 @@ print("Percent of succesful episodes: " + str(sum(rList) / num_episodes) + "%")
 
 rList = np.array(rList)
 rMean = np.average(rList)
-# plt.plot(rMean)
 plt.plot(rList)
 
