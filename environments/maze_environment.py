@@ -39,8 +39,10 @@ class environment():
         # but instead walks in a diagonal shortest path to the goal. For value 2.0 there are no walking blocks except for the optimal path, i.e the floor is all empty but for the optimal path and the optimal path
         # is a straight line to the final goal and the agent follows this optimal path. The gap block doesn't necessarily have to be air, it can be defined as lapis_ore or anything else as well.
 
-        self.video_width = 432
-        self.video_height = 240
+        # self.video_width = 432
+        self.video_width = 84
+        # self.video_height = 240
+        self.video_height = 84
         self.want_depth_channel = 'false'
         if(self.want_depth_channel=='false'):
             self.video_channels = 3
@@ -82,6 +84,7 @@ class environment():
 
         self.curr_episode_num = 0
         self.action_dict = {0: 'move 0.3', 1: 'move 0', 2: 'move -0.3', 3: 'turn 0.1', 4: 'turn 0', 5: 'turn -0.1'}
+        # self.action_dict = {0:['move 0.3', 'move 0'], 1:['move -0.3', 'move 0'], 2:['turn 0.1', 'turn 0'], 3:['turn -0.1', 'turn 0']}
         self.total_num_actions = len(self.action_dict)
 
     def get_maze(self):
@@ -187,8 +190,10 @@ class environment():
             if(self.world_state.number_of_observations_since_last_state > 0 and self.world_state.is_mission_running):
                 # print("Got " + str(self.world_state.number_of_observations_since_last_state) + " observations since last state.")
                 try:
+                    # for command in self.action_dict[action]:
+                    #     self.agent_host.sendCommand(self.action_dict[action])
                     self.agent_host.sendCommand(self.action_dict[action])
-                    print('Took action ' + self.action_dict[action])
+                    # print('Took action ' + self.action_dict[action])
                     for reward in self.world_state.rewards:
                         current_reward += reward.getValue()
                     if(current_reward>0):

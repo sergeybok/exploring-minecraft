@@ -72,3 +72,6 @@ This doesn't work as can't use sudo for brew
 	./configure --prefix=/..../..../..../
 	make
 	make install
+
+15. To install tensorflow in the native python of MacOS do the following:
+       sudo /usr/local/bin/pip install --upgrade tensorflow

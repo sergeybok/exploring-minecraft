@@ -1,19 +1,16 @@
 import tensorflow as tf
+import tensorflow.contrib.slim as slim
 import numpy as np
 import random
 import matplotlib.pyplot as plt
 import os
 
-from environments import maze_environment
+# from environments import maze_environment
+import maze_environment
 
 class Qnetwork():
-    def __init__(self, frame_height=None, frame_width=None, frame_channels=None, network_name=None):
-        # The network recieves a frame from the game, flattened into an array.
-        # It then resizes it and processes it through four convolutional layers.
-        # TODO :: DONE define the frame size here
+    def __init__(self, frame_height=None, frame_width=None, frame_channels=None, total_num_actions=None, network_name=None):
         flattened_frame_size = frame_height*frame_width*frame_channels
-        num_final_layer_output_channel = 512
-        total_num_actions = None
         self.flattened_image = tf.placeholder(shape=[None, flattened_frame_size], dtype=tf.float32)
         #[batch, in_height, in_width, in_channels]
         #[filter_height, filter_width, in_channels, out_channels]
@@ -21,24 +18,43 @@ class Qnetwork():
         self.reshaped_image = tf.reshape(self.flattened_image, shape=[-1, frame_height, frame_width, frame_channels])
         self.conv1 = self.conv_layer(input_volume=self.reshaped_image, num_output_channel=32, filter_shape=[8, 8], strides_shape=[1, 4, 4, 1], padding_type='VALID', network_name=network_name, layer_name='1')
         self.conv2 = self.conv_layer(input_volume=self.conv1, num_output_channel=64, filter_shape=[4, 4], strides_shape=[1, 2, 2, 1], padding_type='VALID', network_name=network_name, layer_name='2')
-        self.conv3 = self.conv_layer(input_volume=self.conv2, num_output_channel=128, filter_shape=[3, 3], strides_shape=[1, 1, 1, 1], padding_type='VALID', network_name=network_name, layer_name='3')
-        self.conv4 = self.conv_layer(input_volume=self.conv3, num_output_channel=512, filter_shape=[7, 7], strides_shape=[1, 1, 1, 1], padding_type='VALID', network_name=network_name, layer_name='4')
+        self.conv3 = self.conv_layer(input_volume=self.conv2, num_output_channel=64, filter_shape=[3, 3], strides_shape=[1, 1, 1, 1], padding_type='VALID', network_name=network_name, layer_name='3')
+        # self.conv4 = self.conv_layer(input_volume=self.conv3, num_output_channel=64, filter_shape=[3, 3], strides_shape=[1, 1, 1, 1], padding_type='VALID', network_name=network_name, layer_name='4')
 
-        #TODO Figure out why is the split being done this way, why is split required at all???
-        # We take the output from the final convolutional layer and split it into separate advantage and value streams.
-        self.streamAC, self.streamVC = tf.split(self.conv4, 2, 3)
+        # self.reshaped_image = tf.reshape(self.flattened_image, shape=[-1, frame_height, frame_width, frame_channels])
+        # self.conv1 = slim.conv2d(inputs=self.reshaped_image, num_outputs=32, kernel_size=[8, 8], stride=[4, 4], padding='VALID', biases_initializer=None)
+        # self.conv2 = slim.conv2d(inputs=self.conv1, num_outputs=64, kernel_size=[4, 4], stride=[2, 2], padding='VALID', biases_initializer=None)
+        # self.conv3 = slim.conv2d(inputs=self.conv2, num_outputs=64, kernel_size=[3, 3], stride=[1, 1], padding='VALID', biases_initializer=None)
+        # self.conv4 = slim.conv2d(inputs=self.conv3, num_outputs=num_final_layer_output_channel, kernel_size=[7, 7], stride=[1, 1], padding='VALID', biases_initializer=None)
+
+        #NOTE :::: Split is not really required, also even if you use split, it should be done on the dimension of feature maps. Also the weight matrices have to be correctly shaped.
+        self.streamAC = self.conv3
+        self.streamVC = self.conv3
         self.streamA = tf.contrib.layers.flatten(self.streamAC)
         self.streamV = tf.contrib.layers.flatten(self.streamVC)
         xavier_init = tf.contrib.layers.xavier_initializer()
-        #TODO add bias to the advantage and value functions
-        self.AW = tf.Variable(xavier_init([num_final_layer_output_channel // 2, total_num_actions]))
-        self.VW = tf.Variable(xavier_init([num_final_layer_output_channel // 2, 1]))
-        self.Advantage = tf.matmul(self.streamA, self.AW)
-        self.Value = tf.matmul(self.streamV, self.VW)
+        # print(tf.shape(self.streamA)[1])
+        self.AW1 = tf.Variable(xavier_init([self.streamA.shape[1].value, 512]))
+        self.ABias1 = tf.Variable(tf.constant(0.1, shape=[512]))
+        self.VW1 = tf.Variable(xavier_init([self.streamV.shape[1].value, 512]))
+        self.VBias1 = tf.Variable(tf.constant(0.1, shape=[512]))
+        self.Advantage_FC1 = tf.matmul(self.streamA, self.AW1)+self.ABias1
+        self.Advantage_FC1 = tf.nn.relu(self.Advantage_FC1)
+        self.Value_FC1 = tf.matmul(self.streamV, self.VW1)+self.VBias1
+        self.Value_FC1 = tf.nn.relu(self.Value_FC1)
+        self.AW2 = tf.Variable(xavier_init([self.Advantage_FC1.shape[1].value, total_num_actions]))
+        self.ABias2 = tf.Variable(tf.constant(0.1, shape=[total_num_actions]))
+        self.VW2 = tf.Variable(xavier_init([self.Value_FC1.shape[1].value, 1]))
+        self.VBias2 = tf.Variable(tf.constant(0.1, shape=[1]))
+        self.Advantage = tf.matmul(self.Advantage_FC1, self.AW2)+self.ABias2
+        self.Value = tf.matmul(self.Value_FC1, self.VW2)+self.VBias2
 
-        # Then combine them together to get our final Q-values.
+        # NOTE ::: Add the state value and advantage value to get the q values but note that we subtract the average advantage value from advantage value of all actions.
         self.Qout = self.Value + tf.subtract(self.Advantage, tf.reduce_mean(self.Advantage, axis=1, keep_dims=True))
-        self.predict = tf.argmax(self.Qout, 1)
+        # We predict the action using argmax of advantages and not on Q values, anyway the argmax will be the same from both advantage and q values
+        # But taking the argmax from the advantage values saves us the computation of V values
+        # self.predict = tf.argmax(self.Qout, 1)
+        self.predict = tf.argmax(self.Advantage, 1)
 
         # Below we obtain the loss by taking the sum of squares difference between the target and prediction Q values.
         self.targetQ = tf.placeholder(shape=[None], dtype=tf.float32)
@@ -49,8 +65,12 @@ class Qnetwork():
 
         self.td_error = tf.square(self.targetQ - self.Q)
         self.loss = tf.reduce_mean(self.td_error)
-        self.trainer = tf.train.AdamOptimizer(learning_rate=0.0001)
-        self.updateModel = self.trainer.minimize(self.loss)
+        if(network_name=='main'):
+            self.optimizer = tf.train.AdamOptimizer(learning_rate=0.0001)
+            gvs = self.optimizer.compute_gradients(self.loss)
+            capped_gvs = [(tf.clip_by_norm(grad, 10.0), var) for grad, var in gvs]
+            self.train_op = self.optimizer.apply_gradients(capped_gvs)
+            # self.train_op = self.optimizer.minimize(self.loss)
 
 
     def conv_layer(self, input_volume = None, num_output_channel = None, filter_shape = None, strides_shape = None, padding_type = None, network_name=None, layer_name = None,):
@@ -81,12 +101,9 @@ class experience_buffer():
 
     def sample(self, size):
         #Since we have 5 elements in the experience : s, a, r, s1, is_terminal_flag, therefore we reshape it as [size, 5]
+        if(size>len(self.buffer)):
+            size = len(self.buffer)
         return np.reshape(np.array(random.sample(self.buffer, size)), [size, 5])
-
-
-# # This is a simple function to resize our game frames.
-# def processState(states):
-#     return np.reshape(states, [21168])
 
 
 # These functions allow us to update the parameters of our target network with those of the primary network.
@@ -106,17 +123,18 @@ def updateTarget(op_holder, sess):
 
 # ### Training the network
 # Setting all the training parameters
-batch_size = 32  # How many experiences to use for each training step.
+batch_size = 1000  # How many experiences to use for each training step.
 update_freq = 10  # How often to perform a training step.
 gamma_discount_factor = .99  # Discount factor on the target Q-values
 startE = 1  # Starting chance of random action
 endE = 0.1  # Final chance of random action
-annealing_steps = 5000.  # How many steps of training to reduce startE to endE.
-num_episodes = 5000  # How many episodes of game environment to train network with.
-pre_train_steps = 5000  # How many steps of random actions before training begins.
-max_epLength = 50  # The max allowed length of our episode.
+annealing_steps = 100.  # How many steps of training to reduce startE to endE.
+num_episodes = 100 # How many episodes of game environment to train network with.
+pre_train_steps = 50  # How many steps of random actions before training begins.
+# max_epLength = 500  # The max allowed length of our episode.
 load_model = False  # Whether to load a saved model.
 path = "./dqn_model"  # The path to save our model to.
+model_saving_freq = 10
 # h_size = 512  # The size of the final convolutional layer before splitting it into Advantage and Value streams.
 tau = 0.001  # Rate to update target network toward primary network
 
@@ -126,17 +144,15 @@ maze_env = maze_environment.environment()
 frame_height = maze_env.video_height
 frame_width = maze_env.video_width
 frame_channels = maze_env.video_channels
-mainQN = Qnetwork(frame_height=frame_height, frame_width=frame_width, frame_channels=frame_channels, network_name='main')
-targetQN = Qnetwork(frame_height=frame_height, frame_width=frame_width, frame_channels=frame_channels, network_name='target')
+#TODO define whether the actions are continous or discrete
+total_num_actions = maze_env.total_num_actions
+mainQN = Qnetwork(frame_height=frame_height, frame_width=frame_width, frame_channels=frame_channels, total_num_actions=total_num_actions, network_name='main')
+targetQN = Qnetwork(frame_height=frame_height, frame_width=frame_width, frame_channels=frame_channels, total_num_actions=total_num_actions, network_name='target')
 
 init = tf.global_variables_initializer()
-
 saver = tf.train.Saver()
-
 trainables = tf.trainable_variables()
-
 targetOps = updateTargetGraph(trainables, tau)
-
 myBuffer = experience_buffer()
 
 # Set the rate of random action decrease.
@@ -159,29 +175,36 @@ with tf.Session() as sess:
         ckpt = tf.train.get_checkpoint_state(path)
         saver.restore(sess, ckpt.model_checkpoint_path)
     for i in range(num_episodes):
+        curr_episode_total_reward = 0
         maze_env.get_maze()
         episodeBuffer = experience_buffer()
-        # Reset environment and get first new observation
         s = maze_env.get_current_state()
-        #TODO define total_num_actions, also define whether continous or discrete actions
-        total_num_actions = maze_env.total_num_actions
-        # s = processState(s)
         is_terminal_flag = False
-        rAll = 0
         j = 0
         # The Q-Network
-        while j < max_epLength:  # If the agent takes longer than 50 moves to reach the end of the maze, end the trial.
+        #NOTE ::: We can condition the below while loop on either a pre-defined number of maximum action or wait for the environment episode to get over when the agent runs out of the mission time.
+        #NOTE ::: I have conditioned the while loop on the mission time.
+        # while j < max_epLength:  # If the agent takes longer than 50 moves to reach the end of the maze, end the trial.
+        while(maze_env.world_state.is_mission_running):
             j += 1
             # Choose an action by greedily (with e chance of random action) from the Q-network
             if np.random.rand(1) < e or total_steps < pre_train_steps:
                 a = np.random.randint(0, total_num_actions)
             else:
                 a = sess.run(mainQN.predict, feed_dict={mainQN.flattened_image: [s]})[0]
-            s1, r, is_terminal_flag = maze_env.take_action(a)
-            # s1 = processState(s1)
+            action_result = maze_env.take_action(a)
+            if(action_result):
+                is_terminal_flag = action_result[2]
+                if(not(is_terminal_flag)):
+                    s1 = action_result[0]
+                    r = action_result[1]
+                else:
+                    #TODO ::: Update this else condition when I can get the terminal state frame and terminal state rewards
+                    break
+            else:
+                break
             total_steps += 1
-            episodeBuffer.add(
-                np.reshape(np.array([s, a, r, s1, is_terminal_flag]), [1, 5]))  # Save the experience to our episode buffer.
+            episodeBuffer.add(np.reshape(np.array([s, a, r, s1, is_terminal_flag]), [1, 5]))  # Save the experience to our episode buffer.
             # Since we have 5 elements in the experience : s, a, r, s1, is_terminal_flag, therefore we reshape it as [size, 5]
 
             if total_steps > pre_train_steps:
@@ -189,37 +212,37 @@ with tf.Session() as sess:
                 if e > endE:
                     e -= stepDrop
 
-                if total_steps % (update_freq) == 0:
+                if(total_steps % (update_freq) == 0 and i>0):
+                    print('current overall experience buffer size is '+str(len(myBuffer.buffer)))
+                    print('sample a batch size of '+str(batch_size))
                     trainBatch = myBuffer.sample(batch_size)  # Get a random batch of experiences.
                     # Below we perform the Double-DQN update to the target Q-values
                     Q1 = sess.run(mainQN.predict, feed_dict={mainQN.flattened_image: np.vstack(trainBatch[:, 3])})
                     Q2 = sess.run(targetQN.Qout, feed_dict={targetQN.flattened_image: np.vstack(trainBatch[:, 3])})
-                    #TODO :: Done figure out the use of end_multiplier???, the is_terminal_flag gets stored as 1 or 0(True or False),
-                    #todo :: Done if the is_terminal_flag is true i.e 1, we define the end_multiplier as 0, if the is_terminal_flag is false i.e 0, we define the end_multiplier as 1
+                    #NOTE ::: the use of end_multiplier --- the is_terminal_flag gets stored as 1 or 0(True or False),
+                    #NOTE ::: Done if the is_terminal_flag is true i.e 1, we define the end_multiplier as 0, if the is_terminal_flag is false i.e 0, we define the end_multiplier as 1
                     end_multiplier = -(trainBatch[:, 4] - 1)
                     doubleQ = Q2[range(batch_size), Q1]
                     targetQ = trainBatch[:, 2] + (gamma_discount_factor * doubleQ * end_multiplier)
                     # Update the network with our target values.
-                    #TODO it is important to recalculate the Q values of the states in the experience replay and then get the gradient w.r.t difference b/w recalculated values and targets
-                    #TODO otherwise it defeats the purpose of experience replay, also we are not storing the Q values for this reason
-                    _ = sess.run(mainQN.updateModel,
-                                 feed_dict={mainQN.flattened_image: np.vstack(trainBatch[:, 0]), mainQN.targetQ: targetQ,
-                                            mainQN.actions: trainBatch[:, 1]})
-
+                    #NOTE ::: it is important to recalculate the Q values of the states in the experience replay and then get the gradient w.r.t difference b/w recalculated values and targets
+                    #NOTE ::: otherwise it defeats the purpose of experience replay, also we are not storing the Q values for this reason
+                    _ = sess.run(mainQN.train_op, feed_dict={mainQN.flattened_image: np.vstack(trainBatch[:, 0]), mainQN.targetQ:targetQ, mainQN.actions:trainBatch[:, 1]})
                     updateTarget(targetOps, sess)  # Update the target network toward the primary network.
-            rAll += r
+            curr_episode_total_reward += r
             s = s1
 
             if is_terminal_flag == True:
                 break
 
+        print('Episode : '+str(i)+' Total reward : '+str(curr_episode_total_reward)+' Total steps : '+str(j))
         myBuffer.add(episodeBuffer.buffer)
         jList.append(j)
-        rList.append(rAll)
+        rList.append(curr_episode_total_reward)
         # Periodically save the model.
-        if i % 1000 == 0:
+        if(i % model_saving_freq == 0 and i>0):
             saver.save(sess, path + '/model-' + str(i) + '.ckpt')
-            print("Saved Model")
+            print("Saved Model after episode : "+str(i))
         if len(rList) % 10 == 0:
             print(total_steps, np.mean(rList[-10:]), e)
     saver.save(sess, path + '/model-' + str(i) + '.ckpt')
@@ -228,7 +251,8 @@ print("Percent of succesful episodes: " + str(sum(rList) / num_episodes) + "%")
 # ### Checking network learning
 # Mean reward over time
 
-rMat = np.resize(np.array(rList), [len(rList) // 100, 100])
-rMean = np.average(rMat, 1)
-plt.plot(rMean)
+rList = np.array(rList)
+rMean = np.average(rList)
+# plt.plot(rMean)
+plt.plot(rList)
 
