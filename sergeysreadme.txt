@@ -10,6 +10,8 @@ cmake ..
 comment out everything with CSharp
 
 
+export MALMO_XSD_PATH=~/MalmoPlatform/Schemas
+
 make
 https://github.com/Microsoft/malmo/blob/master/doc/build_macosx.md (if mission.h file can't be found)
 

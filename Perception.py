@@ -1,6 +1,6 @@
 
 import tensorflow as tf 
-from tensorflow.contrib import slim 
+from tensorflow.contrib import slim
 import numpy as np 
 
 
@@ -23,11 +23,11 @@ def CNN(input, height, width,in_channel, out_channel,network_name,afn=tf.nn.elu)
 						kernel_size=[3,3],stride=[1,1],
 						padding='VALID',scope=(network_name+"_CNN_3"))
 
-	conv4 = slim.conv2d(inputs=conv3,num_outputs=out_channel,activation_fn=afn,
+	conv4 = slim.conv2d(inputs=conv3,num_outputs=out_channel,activation_fn=tf.nn.sigmoid,
 						kernel_size=[7,7],stride=[1,1],
 						padding='VALID',scope=(network_name+"_CNN_4"))
 
-	return conv4
+	return tf.contrib.layers.flatten(conv4)
 
 
 
@@ -63,21 +63,23 @@ def Deconv(input, height, width, in_channel, out_channel,network_name):
 
 
 def Predictor(state, state_size, action, height, width, 
-				in_channel, out_channel,
-				network_name): 
+				out_channel,network_name): 
 	scope = network_name+'_Predictor'
 	#state_size = tf.shape(state)[1]
 
-	deconv_input = slim.fully_connected(inputs=state,
+	deconv_input_state = slim.fully_connected(
+						inputs=state,
 						num_outputs=state_size,
 						activation_fn=tf.nn.sigmoid,
-						scope=(scope+'_state')) + slim.fully_connected(
+						scope=(scope+'_state')) 
+	deconv_input_action = slim.fully_connected(
 							inputs=action,
 							num_outputs=state_size,
 							activation_fn=tf.nn.tanh,
 							scope=(scope+'_action'))
-
-	return Deconv(deconv_input,height,width,1,out_channel,network_name)
+	deconv_input = deconv_input_state + deconv_input_action
+	
+	return Deconv(deconv_input,height,width,state_size,out_channel,network_name)
 
 
 
