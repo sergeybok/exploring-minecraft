@@ -4,6 +4,7 @@ import numpy as np
 import random
 import matplotlib.pyplot as plt
 import os
+import pickle
 
 # from environments import maze_environment
 import maze_environment
@@ -81,7 +82,8 @@ class Qnetwork():
         b = tf.Variable(tf.constant(0.1, shape=b_shape), name=network_name+'_bias_'+layer_name)
         conv = tf.nn.conv2d(input_volume, W, strides_shape, padding=padding_type, name=network_name+'_Conv_'+layer_name)
         conv = conv + b
-        relu = tf.nn.relu(conv, name=network_name+'_ReLU_'+layer_name)
+        relu = tf.nn.elu(conv, name=network_name+'_ReLU_'+layer_name)
+        # relu = tf.nn.relu(conv, name=network_name+'_ReLU_'+layer_name)
         return relu
         # pool1_ksize = [1, 2, 2, 1]
         # strides_pool1 = [1, 2, 2, 1]
@@ -123,13 +125,13 @@ def updateTarget(op_holder, sess):
 
 # ### Training the network
 # Setting all the training parameters
-batch_size = 5000  # How many experiences to use for each training step.
-update_freq_per_episodes = 10  # How often to perform a training step.
+batch_size = 100  # How many experiences to use for each training step.
+update_freq_per_episodes = 1  # How often to perform a training step.
 gamma_discount_factor = .99  # Discount factor on the target Q-values
 startE = 0.5  # Starting chance of random action
 endE = 0.05  # Final chance of random action
 annealing_steps = 5000.  # How many steps of training to reduce startE to endE.
-num_episodes = 50 # How many episodes of game environment to train network with.
+num_episodes = 200 # How many episodes of game environment to train network with.
 pre_train_steps = 100  # How many steps of random actions before training begins.
 # max_epLength = 500  # The max allowed length of our episode.
 load_model = False  # Whether to load a saved model.
@@ -168,17 +170,18 @@ total_steps = 0
 if not os.path.exists(path):
     os.makedirs(path)
 
+curr_episode_total_reward_placeholder = tf.placeholder(tf.float32, name='curr_episode_total_reward')
+curr_episode_reward_summary = tf.summary.scalar("curr_episode_total_reward", curr_episode_total_reward_placeholder)
 with tf.Session() as sess:
     writer_op = tf.summary.FileWriter('./tf_graphs', sess.graph)
     sess.run(init)
+    curr_episode_total_reward_summary = tf.Summary()
     if load_model == True:
         print('Loading Model...')
         ckpt = tf.train.get_checkpoint_state(path)
         saver.restore(sess, ckpt.model_checkpoint_path)
     for i in range(num_episodes):
         curr_episode_total_reward = 0
-        tf.summary.scalar('curr_episode_total_reward', curr_episode_total_reward)
-        curr_episode_total_reward_summary = tf.Summary()
         maze_env.get_maze()
         episodeBuffer = experience_buffer()
         s = maze_env.get_current_state()
@@ -212,8 +215,8 @@ with tf.Session() as sess:
             curr_episode_total_reward += r
             s = s1
 
-            curr_episode_total_reward_summary.value.add(tag='curr_episode_total_reward_summary', simple_value=curr_episode_total_reward)
-            writer_op.add_summary(curr_episode_total_reward_summary, i)
+            summary_val, = sess.run([curr_episode_reward_summary], feed_dict={curr_episode_total_reward_placeholder: curr_episode_total_reward})
+            writer_op.add_summary(summary_val, i+1)
 
             if total_steps > pre_train_steps:
                 # NOTE::: We are reducing the epsilon of exploration after every action we take, not after every episode, so the epsilon decreases within 1 episode
@@ -225,24 +228,25 @@ with tf.Session() as sess:
 
         if total_steps > pre_train_steps:
             if (i % (update_freq_per_episodes) == 0 and i > 0):
-                # print('current overall experience buffer size is '+str(len(myBuffer.buffer)))
-                # print('sample a batch size of '+str(batch_size))
-                trainBatch, actual_sampled_size = myBuffer.sample(batch_size)  # Get a random batch of experiences.
-                # Below we perform the Double-DQN update to the target Q-values
-                Q1 = sess.run(mainQN.predict, feed_dict={mainQN.flattened_image: np.vstack(trainBatch[:, 3])})
-                Q2 = sess.run(targetQN.Qout, feed_dict={targetQN.flattened_image: np.vstack(trainBatch[:, 3])})
-                # NOTE ::: the use of end_multiplier --- the is_terminal_flag gets stored as 1 or 0(True or False),
-                # NOTE ::: Done if the is_terminal_flag is true i.e 1, we define the end_multiplier as 0, if the is_terminal_flag is false i.e 0, we define the end_multiplier as 1
-                end_multiplier = -(trainBatch[:, 4] - 1)
-                doubleQ = Q2[range(actual_sampled_size), Q1]
-                targetQ = trainBatch[:, 2] + (gamma_discount_factor * doubleQ * end_multiplier)
-                # Update the network with our target values.
-                # NOTE ::: it is important to recalculate the Q values of the states in the experience replay and then get the gradient w.r.t difference b/w recalculated values and targets
-                # NOTE ::: otherwise it defeats the purpose of experience replay, also we are not storing the Q values for this reason
-                _ = sess.run(mainQN.train_op,
-                             feed_dict={mainQN.flattened_image: np.vstack(trainBatch[:, 0]), mainQN.targetQ: targetQ,
-                                        mainQN.actions: trainBatch[:, 1]})
-                updateTarget(targetOps, sess)  # Update the target network toward the primary network.
+                for batch_num in range(10):
+                    # print('current overall experience buffer size is '+str(len(myBuffer.buffer)))
+                    # print('sample a batch size of '+str(batch_size))
+                    trainBatch, actual_sampled_size = myBuffer.sample(batch_size)  # Get a random batch of experiences.
+                    # Below we perform the Double-DQN update to the target Q-values
+                    Q1 = sess.run(mainQN.predict, feed_dict={mainQN.flattened_image: np.vstack(trainBatch[:, 3])})
+                    Q2 = sess.run(targetQN.Qout, feed_dict={targetQN.flattened_image: np.vstack(trainBatch[:, 3])})
+                    # NOTE ::: the use of end_multiplier --- the is_terminal_flag gets stored as 1 or 0(True or False),
+                    # NOTE ::: Done if the is_terminal_flag is true i.e 1, we define the end_multiplier as 0, if the is_terminal_flag is false i.e 0, we define the end_multiplier as 1
+                    end_multiplier = -(trainBatch[:, 4] - 1)
+                    doubleQ = Q2[range(actual_sampled_size), Q1]
+                    targetQ = trainBatch[:, 2] + (gamma_discount_factor * doubleQ * end_multiplier)
+                    # Update the network with our target values.
+                    # NOTE ::: it is important to recalculate the Q values of the states in the experience replay and then get the gradient w.r.t difference b/w recalculated values and targets
+                    # NOTE ::: otherwise it defeats the purpose of experience replay, also we are not storing the Q values for this reason
+                    _ = sess.run(mainQN.train_op,
+                                 feed_dict={mainQN.flattened_image: np.vstack(trainBatch[:, 0]), mainQN.targetQ: targetQ,
+                                            mainQN.actions: trainBatch[:, 1]})
+                    updateTarget(targetOps, sess)  # Update the target network toward the primary network.
 
         print('Episode : '+str(i)+' Total reward : '+str(curr_episode_total_reward)+' Total steps : '+str(j))
         myBuffer.add(episodeBuffer.buffer)
@@ -263,5 +267,13 @@ print("Percent of succesful episodes: " + str(sum(rList) / num_episodes) + "%")
 
 rList = np.array(rList)
 rMean = np.average(rList)
+print('Mean reward is '+str(rMean))
+
+results_file_name = 'DQN_results.pickle'
+fp = open(results_file_name, 'w')
+results_dict = {'reward_per_episode_list':rList}
+pickle.dump(results_dict, fp)
+fp.close()
+
 plt.plot(rList)
 

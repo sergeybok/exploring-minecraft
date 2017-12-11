@@ -12,7 +12,7 @@ class environment():
     def __init__(self):
         self.maze4 = '''
             <MazeDecorator>
-                <SizeAndPosition length="15" width="15" yOrigin="225" zOrigin="0" height="180"/>
+                <SizeAndPosition length="10" width="10" yOrigin="225" zOrigin="0" height="180"/>
                 <GapProbability variance="0.4">0.4</GapProbability>
                 <Seed>123</Seed>
                 <MaterialSeed>124</MaterialSeed>
@@ -151,13 +151,13 @@ class environment():
                 <ServerHandlers>
                     <FlatWorldGenerator generatorString="3;7,220*1,5*3,2;3;,biome_1" />
                     ''' + mazeblock + '''
-                    <ServerQuitFromTimeUp timeLimitMs="15000"/>
+                    <ServerQuitFromTimeUp timeLimitMs="8000"/>
                     <ServerQuitWhenAnyAgentFinishes />
                 </ServerHandlers>
             </ServerSection>
 
             <AgentSection mode="Survival">
-                <Name>James Bond</Name>
+                <Name>LSD Curiosity</Name>
                 <AgentStart>
                     <Placement x="-204" y="81" z="217"/>
                 </AgentStart>
