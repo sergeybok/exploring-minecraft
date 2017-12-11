@@ -44,72 +44,21 @@ batch_size = 100
 
 
 
-maze1 = '''
-    <MazeDecorator>
-        <SizeAndPosition length="60" width="60" yOrigin="225" zOrigin="0" height="180"/>
-        <GapProbability variance="0.4">0.5</GapProbability>
-        <Seed>random</Seed>
-        <MaterialSeed>random</MaterialSeed>
-        <AllowDiagonalMovement>false</AllowDiagonalMovement>
-        <StartBlock fixedToEdge="true" type="emerald_block" height="1"/>
-        <EndBlock fixedToEdge="true" type="redstone_block diamond_block gold_block" height="12"/>
-        <PathBlock type="stained_hardened_clay" colour="WHITE ORANGE MAGENTA LIGHT_BLUE YELLOW LIME PINK GRAY SILVER CYAN PURPLE BLUE BROWN GREEN RED BLACK" height="1"/>
-        <FloorBlock type="stone"/>
-        <GapBlock type="air"/>
-        <AddQuitProducer description="finished maze"/>
-        <AddNavigationObservations/>
-    </MazeDecorator>
-'''
-
-maze2 = '''
-    <MazeDecorator>
-        <SizeAndPosition length="19" width="19" scale="3" yOrigin="225" zOrigin="0" height="180"/>
-        <GapProbability variance="0.4">0.5</GapProbability>
-        <Seed>random</Seed>
-        <MaterialSeed>random</MaterialSeed>
-        <AllowDiagonalMovement>false</AllowDiagonalMovement>
-        <StartBlock fixedToEdge="true" type="emerald_block" height="1"/>
-        <EndBlock fixedToEdge="true" type="redstone_block lapis_block" height="12"/>
-        <PathBlock type="stained_glass" colour="WHITE ORANGE MAGENTA LIGHT_BLUE YELLOW LIME PINK GRAY SILVER CYAN PURPLE BLUE BROWN GREEN RED BLACK" height="1"/>
-        <FloorBlock type="glowstone"/>
-        <GapBlock type="stone" height="10"/>
-        <AddQuitProducer description="finished maze"/>
-        <AddNavigationObservations/>
-    </MazeDecorator>
-'''
-
-maze3 = '''
-    <MazeDecorator>
-        <SizeAndPosition length="60" width="60" yOrigin="225" zOrigin="0" height="180"/>
-        <GapProbability>0.2</GapProbability>
-        <Seed>random</Seed>
-        <MaterialSeed>random</MaterialSeed>
-        <AllowDiagonalMovement>false</AllowDiagonalMovement>
-        <StartBlock fixedToEdge="true" type="emerald_block" height="1"/>
-        <EndBlock fixedToEdge="true" type="redstone_block" height="12"/>
-        <PathBlock type="glowstone stained_glass dirt" colour="WHITE ORANGE MAGENTA LIGHT_BLUE YELLOW LIME PINK GRAY SILVER CYAN PURPLE BLUE BROWN GREEN RED BLACK" height="1"/>
-        <FloorBlock type="stone" variant="smooth_granite"/>
-        <SubgoalBlock type="beacon sea_lantern glowstone"/>
-        <GapBlock type="air"/>
-        <AddQuitProducer description="finished maze"/>
-        <AddNavigationObservations/>
-   </MazeDecorator>
-'''
 
 maze4 = '''
     <MazeDecorator>
-        <SizeAndPosition length="60" width="60" yOrigin="225" zOrigin="0" height="180"/>
-        <GapProbability variance="0.4">0.5</GapProbability>
-        <Seed>random</Seed>
-        <MaterialSeed>random</MaterialSeed>
+        <SizeAndPosition length="15" width="15" yOrigin="225" zOrigin="0" height="180"/>
+        <GapProbability variance="0.4">0.4</GapProbability>
+        <Seed>123</Seed>
+        <MaterialSeed>124</MaterialSeed>
         <AllowDiagonalMovement>false</AllowDiagonalMovement>
         <StartBlock fixedToEdge="true" type="emerald_block" height="1"/>
         <EndBlock fixedToEdge="true" type="redstone_block" height="12"/>
-        <PathBlock type="stone dirt stained_hardened_clay" colour="WHITE ORANGE MAGENTA LIGHT_BLUE YELLOW LIME PINK GRAY SILVER CYAN PURPLE BLUE BROWN GREEN RED BLACK" height="1"/>
+        <PathBlock type="dirt" height="1"/>
         <FloorBlock type="stone" variant="smooth_granite"/>
-        <SubgoalBlock type="beacon sea_lantern glowstone"/>
-        <OptimalPathBlock type="stone" variant="smooth_granite andesite smooth_diorite diorite"/>
-        <GapBlock type="lapis_ore stained_hardened_clay air" colour="WHITE ORANGE MAGENTA LIGHT_BLUE YELLOW LIME PINK GRAY SILVER CYAN PURPLE BLUE BROWN GREEN RED BLACK" height="3" heightVariance="3"/>
+        <SubgoalBlock type="glowstone"/>
+        <OptimalPathBlock type="stone" variant="smooth_diorite"/>
+        <GapBlock type="air" height="1"/>
         <AddQuitProducer description="finished maze"/>
         <AddNavigationObservations/>
     </MazeDecorator>
@@ -144,6 +93,11 @@ def GetMissionXML( mazeblock ):
                 <Placement x="-204" y="81" z="217"/>
             </AgentStart>
             <AgentHandlers>
+                <RewardForTouchingBlockType>
+                    <Block reward="100.0" type="redstone_block" behaviour="onceOnly"/>
+                    <Block reward="20.0" type="glowstone"/>
+                    <Block reward="10.0" type="stone" variant="smooth_diorite"/>
+                </RewardForTouchingBlockType>
                 <VideoProducer want_depth="false">
                     <Width>''' + str(video_width) + '''</Width>
                     <Height>''' + str(video_height) + '''</Height>
@@ -369,7 +323,7 @@ class A3C:
         
             self.agent_host.sendCommand(self.action_space[a])
 
-            world_state = self.agent_host.getWorldState()
+            time.sleep(0.05)
         
             #r = world_state.rewards[0].getValue()
             r = get_rewards(world_state.rewards)
@@ -390,9 +344,11 @@ class A3C:
             episode_buffer.append([s,a,r,s1,d,v[0,0]])
             episode_values.append(v[0,0])
 
-            
-            episode_reward += r 
+            episode_reward += r
             s = s1 
+
+            world_state = self.agent_host.getWorldState()
+
         #self.episode_reward.append(episode_reward)
         v_l,p_l,e_l = self.train(episode_buffer,self.sess,self.gamma,0.0)
 
@@ -403,6 +359,7 @@ class A3C:
             self.saver.save(self.sess,'maze_models/maze_ep_{0}.cpkt'.format(self.episode_count))
 
 
+        print('episode reward = {0}'.format(episode_reward))
         print('episode {0}, value loss = {1} | policy = {2} | entropy = {3}'.format(self.episode_count,v_l,p_l,e_l))
 
 
@@ -421,7 +378,7 @@ else:
 validate = True
 #mazeblocks = [maze1, maze2, maze3, maze4]
 
-mazeblocks = [maze2]
+mazeblocks = [maze4]
 
 
 agent_host = MalmoPython.AgentHost()

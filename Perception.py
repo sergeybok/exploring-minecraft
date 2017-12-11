@@ -1,6 +1,6 @@
 
 import tensorflow as tf 
-from tensorflow.contrib import slim 
+from tensorflow.contrib import slim
 import numpy as np 
 
 
@@ -23,11 +23,11 @@ def CNN(input, height, width,in_channel, out_channel,network_name,afn=tf.nn.elu)
 						kernel_size=[3,3],stride=[1,1],
 						padding='VALID',scope=(network_name+"_CNN_3"))
 
-	conv4 = slim.conv2d(inputs=conv3,num_outputs=out_channel,activation_fn=afn,
+	conv4 = slim.conv2d(inputs=conv3,num_outputs=out_channel,activation_fn=tf.nn.sigmoid,
 						kernel_size=[7,7],stride=[1,1],
 						padding='VALID',scope=(network_name+"_CNN_4"))
 
-	return conv4
+	return tf.contrib.layers.flatten(conv4)
 
 
 
@@ -37,25 +37,22 @@ def Deconv(input, height, width, in_channel, out_channel,network_name):
 
 	img = tf.reshape(input,shape=[-1,1,1,in_channel])
 
-	#if((height & (height - 1) or (width & (width - 1))):
-		# much easier to deconvolve, to power of 2,
-		# 	can be fixed otherwise but code will be uglier
-	#	print('Manav, please use out height width that are powers of 2')
+	#
 
 	scope = network_name + '_Deconv'
 
 	dconv1 = slim.conv2d_transpose(inputs=img,num_outputs=128,stride=[1,1],
 							kernel_size=[7,7],activation_fn=tf.nn.elu,
-							padding='VALID',scope=(scope+'_1'))
+							padding='VALID',reuse=True,scope=(scope+'_1'))
 	dconv2 = slim.conv2d_transpose(inputs=dconv1,num_outputs=64,stride=[1,1],
 							kernel_size=[3,3],activation_fn=tf.nn.elu,
-							padding='VALID',scope=(scope+'_2'))
+							padding='VALID',reuse=True,scope=(scope+'_2'))
 	dconv3 = slim.conv2d_transpose(inputs=dconv2,num_outputs=32,stride=[2,2],
 							kernel_size=[4,4],activation_fn=tf.nn.elu,
-							padding='VALID',scope=(scope+'_3'))
+							padding='VALID',reuse=True,scope=(scope+'_3'))
 	dconv4 = slim.conv2d_transpose(inputs=dconv3,num_outputs=out_channel,
 							stride=[4,4],kernel_size=[8,8],activation_fn=tf.nn.sigmoid,
-							padding='VALID',scope=(scope+'_4'))
+							padding='VALID',reuse=True,scope=(scope+'_4'))
 
 	return dconv4
 
@@ -63,21 +60,25 @@ def Deconv(input, height, width, in_channel, out_channel,network_name):
 
 
 def Predictor(state, state_size, action, height, width, 
-				in_channel, out_channel,
-				network_name): 
+				out_channel,network_name): 
 	scope = network_name+'_Predictor'
 	#state_size = tf.shape(state)[1]
 
-	deconv_input = slim.fully_connected(inputs=state,
+	deconv_input_state = slim.fully_connected(
+						inputs=state,
 						num_outputs=state_size,
 						activation_fn=tf.nn.sigmoid,
-						scope=(scope+'_state')) + slim.fully_connected(
+						reuse=True,
+						scope=(scope+'_state')) 
+	deconv_input_action = slim.fully_connected(
 							inputs=action,
 							num_outputs=state_size,
 							activation_fn=tf.nn.tanh,
+							reuse=True,
 							scope=(scope+'_action'))
-
-	return Deconv(deconv_input,height,width,1,out_channel,network_name)
+	deconv_input = deconv_input_state + deconv_input_action
+	
+	return Deconv(deconv_input,height,width,state_size,out_channel,network_name)
 
 
 

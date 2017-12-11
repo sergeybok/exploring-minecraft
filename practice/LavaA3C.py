@@ -86,6 +86,7 @@ def get_rewards(rewards):
 class TabQAgent(object):
     """Tabular Q-learning agent for discrete state/action spaces."""
 
+
     def __init__(self):
         self.epsilon = 0.01 # chance of taking a random action instead of the best
 
@@ -286,10 +287,12 @@ class TabQAgent(object):
 
 
 class A3C:
-    def __init__(self,gamma=0.96):
+    def __init__(self,gamma=0.96,action_mode='absolute'):
         
-        self.action_space = ['move 1', 'move -1', 'turn 1', 'turn -1']
-
+        if action_mode == 'relative':
+            self.action_space = ['move 1', 'move -1', 'turn 1', 'turn -1']
+        else:
+            self.action_space = ["movenorth 1", "movesouth 1", "movewest 1", "moveeast 1"]
         self.gamma = gamma
 
         self.episode_count = 0
@@ -355,8 +358,9 @@ class A3C:
         self.value_loss = 0.5 * tf.reduce_sum(tf.square(self.target_v - tf.reshape(self.value,[-1])),name='value_loss')
         self.entropy = - tf.reduce_sum(self.policy * tf.log(self.policy),name='entropy_loss')
         self.policy_loss = tf.abs(tf.reduce_sum(tf.log(self.responsible_outputs)*self.advantages,name='policy_loss'))
-        self.loss = 0.5 * self.value_loss + self.policy_loss - self.entropy * 0.01
-
+        #self.loss = 0.5 * self.value_loss + self.policy_loss - self.entropy * 0.01
+        self.loss = 0.5 * self.value_loss + self.policy_loss
+        
         optimizer = tf.train.AdamOptimizer(learning_rate)
 
         self.gradients = optimizer.compute_gradients(self.loss)
@@ -438,7 +442,7 @@ class A3C:
 
         return avg_vl, avg_pl, avg_el
 
-    def run(self, agent_host,epsilon=0.3):
+    def run(self, agent_host,epsilon=0.1):
 
         episode_buffer = []
         episode_values = []
@@ -462,10 +466,10 @@ class A3C:
                         self.state_in[0]:rnn_state[0],
                         self.state_in[1]:rnn_state[1]})
             a_greedy = np.argmax(a_dist)
-            if (random.random > epsilon):
+            if (random.random() > epsilon):
                 a = a_greedy
             else :
-                a = random.randint(0,len(self.action_space))
+                a = random.randint(0,len(self.action_space)-1)
         
             agent_host.sendCommand(self.action_space[a])
             time.sleep(0.05)
@@ -500,11 +504,14 @@ class A3C:
         
         self.episode_count += 1
 
+
+
         if (self.episode_count % 20 == 0):
             self.saver.save(self.sess,'maze_models/maze_ep_{0}.cpkt'.format(self.episode_count))
+            epsilon *= 0.8
 
-
-        print('episode {0} buffer = {4}, value loss = {1} | policy = {2} | entropy = {3}'.format(self.episode_count,v_l,p_l,e_l,len(episode_buffer)))
+        print('episode %i buffer = %i, value loss = %0.3f | policy = %0.4f | entropy = %0.4f' % 
+                (self.episode_count,len(episode_buffer),v_l,p_l,e_l,))
         episode_buffer = []
         
         return episode_reward 
@@ -557,6 +564,9 @@ else:
 
 agent = A3C()
 
+start_eps = 0.5
+count = 1
+
 cumulative_rewards = []
 for i in range(num_repeats):
 
@@ -587,9 +597,13 @@ for i in range(num_repeats):
     print()
 
     # -- run the agent in the world -- #
-    cumulative_reward = agent.run(agent_host)
+    cumulative_reward = agent.run(agent_host,start_eps)
     print('Cumulative reward: %d' % cumulative_reward)
     cumulative_rewards += [ cumulative_reward ]
+    count +=1
+
+    if(count % 20 == 0):
+        start_eps *= 0.7
 
     # -- clean up -- #
     time.sleep(1) # (let the Mod reset)
