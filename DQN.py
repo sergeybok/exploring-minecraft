@@ -90,7 +90,7 @@ class Qnetwork():
 # ### Experience Replay
 # This class allows us to store experiences and sample then randomly to train the network.
 class experience_buffer():
-    def __init__(self, buffer_size=50000):
+    def __init__(self, buffer_size=1000):
         self.buffer = []
         self.buffer_size = buffer_size
 
@@ -103,7 +103,7 @@ class experience_buffer():
         #Since we have 5 elements in the experience : s, a, r, s1, is_terminal_flag, therefore we reshape it as [size, 5]
         if(size>len(self.buffer)):
             size = len(self.buffer)
-        return np.reshape(np.array(random.sample(self.buffer, size)), [size, 5])
+        return (np.reshape(np.array(random.sample(self.buffer, size)), [size, 5]), size)
 
 
 # These functions allow us to update the parameters of our target network with those of the primary network.
@@ -123,14 +123,14 @@ def updateTarget(op_holder, sess):
 
 # ### Training the network
 # Setting all the training parameters
-batch_size = 1000  # How many experiences to use for each training step.
-update_freq = 10  # How often to perform a training step.
+batch_size = 5000  # How many experiences to use for each training step.
+update_freq_per_episodes = 10  # How often to perform a training step.
 gamma_discount_factor = .99  # Discount factor on the target Q-values
-startE = 1  # Starting chance of random action
-endE = 0.1  # Final chance of random action
-annealing_steps = 100.  # How many steps of training to reduce startE to endE.
-num_episodes = 100 # How many episodes of game environment to train network with.
-pre_train_steps = 50  # How many steps of random actions before training begins.
+startE = 0.5  # Starting chance of random action
+endE = 0.05  # Final chance of random action
+annealing_steps = 5000.  # How many steps of training to reduce startE to endE.
+num_episodes = 50 # How many episodes of game environment to train network with.
+pre_train_steps = 100  # How many steps of random actions before training begins.
 # max_epLength = 500  # The max allowed length of our episode.
 load_model = False  # Whether to load a saved model.
 path = "./dqn_model"  # The path to save our model to.
@@ -169,6 +169,7 @@ if not os.path.exists(path):
     os.makedirs(path)
 
 with tf.Session() as sess:
+    writer_op = tf.summary.FileWriter('./tf_graphs', sess.graph)
     sess.run(init)
     if load_model == True:
         print('Loading Model...')
@@ -176,6 +177,8 @@ with tf.Session() as sess:
         saver.restore(sess, ckpt.model_checkpoint_path)
     for i in range(num_episodes):
         curr_episode_total_reward = 0
+        tf.summary.scalar('curr_episode_total_reward', curr_episode_total_reward)
+        curr_episode_total_reward_summary = tf.Summary()
         maze_env.get_maze()
         episodeBuffer = experience_buffer()
         s = maze_env.get_current_state()
@@ -206,34 +209,40 @@ with tf.Session() as sess:
             total_steps += 1
             episodeBuffer.add(np.reshape(np.array([s, a, r, s1, is_terminal_flag]), [1, 5]))  # Save the experience to our episode buffer.
             # Since we have 5 elements in the experience : s, a, r, s1, is_terminal_flag, therefore we reshape it as [size, 5]
-
-            if total_steps > pre_train_steps:
-                #NOTE::: We are reducing the epsilon of exploration after every action we take, not after every episode, so the epsilon decreases within 1 episode
-                if e > endE:
-                    e -= stepDrop
-
-                if(total_steps % (update_freq) == 0 and i>0):
-                    print('current overall experience buffer size is '+str(len(myBuffer.buffer)))
-                    print('sample a batch size of '+str(batch_size))
-                    trainBatch = myBuffer.sample(batch_size)  # Get a random batch of experiences.
-                    # Below we perform the Double-DQN update to the target Q-values
-                    Q1 = sess.run(mainQN.predict, feed_dict={mainQN.flattened_image: np.vstack(trainBatch[:, 3])})
-                    Q2 = sess.run(targetQN.Qout, feed_dict={targetQN.flattened_image: np.vstack(trainBatch[:, 3])})
-                    #NOTE ::: the use of end_multiplier --- the is_terminal_flag gets stored as 1 or 0(True or False),
-                    #NOTE ::: Done if the is_terminal_flag is true i.e 1, we define the end_multiplier as 0, if the is_terminal_flag is false i.e 0, we define the end_multiplier as 1
-                    end_multiplier = -(trainBatch[:, 4] - 1)
-                    doubleQ = Q2[range(batch_size), Q1]
-                    targetQ = trainBatch[:, 2] + (gamma_discount_factor * doubleQ * end_multiplier)
-                    # Update the network with our target values.
-                    #NOTE ::: it is important to recalculate the Q values of the states in the experience replay and then get the gradient w.r.t difference b/w recalculated values and targets
-                    #NOTE ::: otherwise it defeats the purpose of experience replay, also we are not storing the Q values for this reason
-                    _ = sess.run(mainQN.train_op, feed_dict={mainQN.flattened_image: np.vstack(trainBatch[:, 0]), mainQN.targetQ:targetQ, mainQN.actions:trainBatch[:, 1]})
-                    updateTarget(targetOps, sess)  # Update the target network toward the primary network.
             curr_episode_total_reward += r
             s = s1
 
+            curr_episode_total_reward_summary.value.add(tag='curr_episode_total_reward_summary', simple_value=curr_episode_total_reward)
+            writer_op.add_summary(curr_episode_total_reward_summary, i)
+
+            if total_steps > pre_train_steps:
+                # NOTE::: We are reducing the epsilon of exploration after every action we take, not after every episode, so the epsilon decreases within 1 episode
+                if e > endE:
+                    e -= stepDrop
+
             if is_terminal_flag == True:
                 break
+
+        if total_steps > pre_train_steps:
+            if (i % (update_freq_per_episodes) == 0 and i > 0):
+                # print('current overall experience buffer size is '+str(len(myBuffer.buffer)))
+                # print('sample a batch size of '+str(batch_size))
+                trainBatch, actual_sampled_size = myBuffer.sample(batch_size)  # Get a random batch of experiences.
+                # Below we perform the Double-DQN update to the target Q-values
+                Q1 = sess.run(mainQN.predict, feed_dict={mainQN.flattened_image: np.vstack(trainBatch[:, 3])})
+                Q2 = sess.run(targetQN.Qout, feed_dict={targetQN.flattened_image: np.vstack(trainBatch[:, 3])})
+                # NOTE ::: the use of end_multiplier --- the is_terminal_flag gets stored as 1 or 0(True or False),
+                # NOTE ::: Done if the is_terminal_flag is true i.e 1, we define the end_multiplier as 0, if the is_terminal_flag is false i.e 0, we define the end_multiplier as 1
+                end_multiplier = -(trainBatch[:, 4] - 1)
+                doubleQ = Q2[range(actual_sampled_size), Q1]
+                targetQ = trainBatch[:, 2] + (gamma_discount_factor * doubleQ * end_multiplier)
+                # Update the network with our target values.
+                # NOTE ::: it is important to recalculate the Q values of the states in the experience replay and then get the gradient w.r.t difference b/w recalculated values and targets
+                # NOTE ::: otherwise it defeats the purpose of experience replay, also we are not storing the Q values for this reason
+                _ = sess.run(mainQN.train_op,
+                             feed_dict={mainQN.flattened_image: np.vstack(trainBatch[:, 0]), mainQN.targetQ: targetQ,
+                                        mainQN.actions: trainBatch[:, 1]})
+                updateTarget(targetOps, sess)  # Update the target network toward the primary network.
 
         print('Episode : '+str(i)+' Total reward : '+str(curr_episode_total_reward)+' Total steps : '+str(j))
         myBuffer.add(episodeBuffer.buffer)
@@ -246,6 +255,7 @@ with tf.Session() as sess:
         if len(rList) % 10 == 0:
             print(total_steps, np.mean(rList[-10:]), e)
     saver.save(sess, path + '/model-' + str(i) + '.ckpt')
+    writer_op.close()
 print("Percent of succesful episodes: " + str(sum(rList) / num_episodes) + "%")
 
 # ### Checking network learning

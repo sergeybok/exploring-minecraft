@@ -151,7 +151,7 @@ class environment():
                 <ServerHandlers>
                     <FlatWorldGenerator generatorString="3;7,220*1,5*3,2;3;,biome_1" />
                     ''' + mazeblock + '''
-                    <ServerQuitFromTimeUp timeLimitMs="45000"/>
+                    <ServerQuitFromTimeUp timeLimitMs="15000"/>
                     <ServerQuitWhenAnyAgentFinishes />
                 </ServerHandlers>
             </ServerSection>
@@ -193,8 +193,8 @@ class environment():
                     # print('Took action ' + self.action_dict[action])
                     for reward in self.world_state.rewards:
                         current_reward += reward.getValue()
-                    if(current_reward>0):
-                        print('reward ::: '+str(current_reward))
+                    # if(current_reward>0):
+                        # print('reward ::: '+str(current_reward))
                     while self.world_state.number_of_video_frames_since_last_state < 1 and self.world_state.is_mission_running:
                         time.sleep(0.05)
                         self.world_state = self.agent_host.getWorldState()
@@ -227,7 +227,8 @@ class environment():
                         self.world_state = self.agent_host.getWorldState()
                         return (next_state, current_reward, is_terminal_flag)
                     else:
-                        print('no obs for action ' + self.action_dict[action])
+                        # print('no obs for action ' + self.action_dict[action])
+                        pass
                 return(None)
         else:
             print("Mission has stopped.")
