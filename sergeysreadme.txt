@@ -27,3 +27,8 @@ need to ./launchClient.sh in one terminal, and run python script in other
 
 build/install/Python_Examples <== directory where I run shit
 
+
+
+
+
+

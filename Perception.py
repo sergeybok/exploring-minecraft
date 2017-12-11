@@ -37,25 +37,22 @@ def Deconv(input, height, width, in_channel, out_channel,network_name):
 
 	img = tf.reshape(input,shape=[-1,1,1,in_channel])
 
-	#if((height & (height - 1) or (width & (width - 1))):
-		# much easier to deconvolve, to power of 2,
-		# 	can be fixed otherwise but code will be uglier
-	#	print('Manav, please use out height width that are powers of 2')
+	#
 
 	scope = network_name + '_Deconv'
 
 	dconv1 = slim.conv2d_transpose(inputs=img,num_outputs=128,stride=[1,1],
 							kernel_size=[7,7],activation_fn=tf.nn.elu,
-							padding='VALID',scope=(scope+'_1'))
+							padding='VALID',reuse=True,scope=(scope+'_1'))
 	dconv2 = slim.conv2d_transpose(inputs=dconv1,num_outputs=64,stride=[1,1],
 							kernel_size=[3,3],activation_fn=tf.nn.elu,
-							padding='VALID',scope=(scope+'_2'))
+							padding='VALID',reuse=True,scope=(scope+'_2'))
 	dconv3 = slim.conv2d_transpose(inputs=dconv2,num_outputs=32,stride=[2,2],
 							kernel_size=[4,4],activation_fn=tf.nn.elu,
-							padding='VALID',scope=(scope+'_3'))
+							padding='VALID',reuse=True,scope=(scope+'_3'))
 	dconv4 = slim.conv2d_transpose(inputs=dconv3,num_outputs=out_channel,
 							stride=[4,4],kernel_size=[8,8],activation_fn=tf.nn.sigmoid,
-							padding='VALID',scope=(scope+'_4'))
+							padding='VALID',reuse=True,scope=(scope+'_4'))
 
 	return dconv4
 
@@ -71,11 +68,13 @@ def Predictor(state, state_size, action, height, width,
 						inputs=state,
 						num_outputs=state_size,
 						activation_fn=tf.nn.sigmoid,
+						reuse=True,
 						scope=(scope+'_state')) 
 	deconv_input_action = slim.fully_connected(
 							inputs=action,
 							num_outputs=state_size,
 							activation_fn=tf.nn.tanh,
+							reuse=True,
 							scope=(scope+'_action'))
 	deconv_input = deconv_input_state + deconv_input_action
 	
