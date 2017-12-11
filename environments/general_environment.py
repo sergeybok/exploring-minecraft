@@ -10,44 +10,10 @@ import errno
 
 class environment():
     def __init__(self):
-        self.maze4 = '''
-            <MazeDecorator>
-                <SizeAndPosition length="10" width="10" yOrigin="5" zOrigin="5" height="15"/>
-                <GapProbability variance="0.4">0.4</GapProbability>
-                <Seed>123</Seed>
-                <MaterialSeed>124</MaterialSeed>
-                <AllowDiagonalMovement>false</AllowDiagonalMovement>
-                <StartBlock fixedToEdge="true" type="emerald_block" height="1"/>
-                <EndBlock fixedToEdge="true" type="redstone_block" height="12"/>
-                <PathBlock type="dirt" height="1"/>
-                <FloorBlock type="stone" variant="smooth_granite"/>
-                <SubgoalBlock type="glowstone"/>
-                <OptimalPathBlock type="stone" variant="smooth_diorite"/>
-                <GapBlock type="dirt" height="1"/>
-                <AddQuitProducer description="finished maze"/>
-                <AddNavigationObservations/>
-            </MazeDecorator>
-            <DrawingDecorator>
-              <DrawBlock type="lapis_block" y="5" z="5" x="15"/>
-            </DrawingDecorator>
-        '''
-
-        # <SizeAndPosition length = "10" width = "10" yOrigin = "225" zOrigin = "0" height = "180"/>
-
-        # TODO: to make it easier for the agent i have now defined the gap block as dirt, therefore basically there are no gaps
-        # TODO: in a more advanced version we will use air as the gap block in this version the agent will have to take the 'jump' action to get out of the vacant hole (i.e air gap block)
-
-        # NOTE:::: OptimalPathBlock is the optimal path hints to the final goal, these are the stones which connect the starting position to the final goal positions via the subgoals
-        # SubgoalBlock are the stones which define the sub goals along the way to the final goal
-        # GapProbability takes value between 0 and 2, not from 0 to 1. It is the probability of having a 'gap'/hole in the elevated waliking area, it not only changes the total number of availabale blocks to walk on,
-        # GapProbability also changes the optimal path to the final goal. For value 0.0 there are no gaps in the walking area, but the agent does not follow the given optimal path which is two perpendicular paths
-        # but instead walks in a diagonal shortest path to the goal. For value 2.0 there are no walking blocks except for the optimal path, i.e the floor is all empty but for the optimal path and the optimal path
-        # is a straight line to the final goal and the agent follows this optimal path. The gap block doesn't necessarily have to be air, it can be defined as lapis_ore or anything else as well.
-
         # self.video_width = 432
-        self.video_width = 84
+        self.video_width = 284
         # self.video_height = 240
-        self.video_height = 84
+        self.video_height = 284
         self.want_depth_channel = 'false'
         if(self.want_depth_channel=='false'):
             self.video_channels = 3
@@ -58,7 +24,6 @@ class environment():
         sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)  # flush print output immediately
 
         self.validate = True
-        self.mazeblocks = [self.maze4]
 
         self.agent_host = MalmoPython.AgentHost()
         self.agent_host.addOptionalIntArgument("speed,s", "Length of tick, in ms.", 50)
@@ -78,7 +43,7 @@ class environment():
         self.agent_host.setRewardsPolicy(MalmoPython.RewardsPolicy.KEEP_ALL_REWARDS)
         self.agent_host.setVideoPolicy(MalmoPython.VideoPolicy.LATEST_FRAME_ONLY)
 
-        self.recordingsDirectory = "MazeRecordings"
+        self.recordingsDirectory = "EnvRecordings"
         self.TICK_LENGTH = self.agent_host.getIntArgument("speed")
 
         try:
@@ -93,15 +58,14 @@ class environment():
         # self.action_dict = {0:['move 0.3', 'move 0'], 1:['move -0.3', 'move 0'], 2:['turn 0.1', 'turn 0'], 3:['turn -0.1', 'turn 0']}
         self.total_num_actions = len(self.action_dict)
 
-    def get_maze(self):
+    def get_env(self):
         # Set up a recording
         my_mission_record = MalmoPython.MissionRecordSpec()
         my_mission_record.recordRewards()
         my_mission_record.recordObservations()
 
         my_mission_record.setDestination(self.recordingsDirectory + "//" + "Mission_" + str(self.curr_episode_num) + ".tgz")
-        mazeblock = random.choice(self.mazeblocks)
-        my_mission = MalmoPython.MissionSpec(self.GetMissionXML(mazeblock), self.validate)
+        my_mission = MalmoPython.MissionSpec(self.GetMissionXML(), self.validate)
 
         max_retries = 3
         for retry in range(max_retries):
@@ -130,58 +94,27 @@ class environment():
         print('\nMission has started')
         self.curr_episode_num += 1
 
-    # TODO :: fix the reward definition at the end of maze i.e touching the redstone properly
-    # TODO :: cannot get the pixel frames for the terminal state, try to fix it, although i don't think we can get any pixels for the terminal state
-    # NOTE ::: Currently I am giving a small negative reward for sending commands, i.e for taking any action at all
-    def GetMissionXML(self, mazeblock):
-        return '''<?xml version="1.0" encoding="UTF-8" ?>
-        <Mission xmlns="http://ProjectMalmo.microsoft.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-            <About>
-                <Summary>Run the maze!</Summary>
-            </About>
-
-            <ModSettings>
-                <MsPerTick>''' + str(self.TICK_LENGTH) + '''</MsPerTick>
-            </ModSettings>
-
-            <ServerSection>
-                <ServerInitialConditions>
-                    <Time>
-                        <StartTime>1000</StartTime>
-                        <AllowPassageOfTime>false</AllowPassageOfTime>
-                    </Time>
-                    <Weather>clear</Weather>
-                    <AllowSpawning>false</AllowSpawning>
-                </ServerInitialConditions>
-                <ServerHandlers>
-                    <FlatWorldGenerator generatorString="3;7,220*1,5*3,2;3;,biome_1" />
-                    ''' + mazeblock + '''
-                    <ServerQuitFromTimeUp timeLimitMs="8000"/>
-                    <ServerQuitWhenAnyAgentFinishes />
-                </ServerHandlers>
-            </ServerSection>
-
-            <AgentSection mode="Survival">
-                <Name>LSD Curiosity</Name>
-                <AgentStart>
-                    <Placement x="-204" y="81" z="217"/>
-                </AgentStart>
-                <AgentHandlers>
-                    <DiscreteMovementCommands/>
-                    <VideoProducer want_depth="'''+str(self.want_depth_channel)+'''">
-                        <Width>''' + str(self.video_width) + '''</Width>
-                        <Height>''' + str(self.video_height) + '''</Height>
-                    </VideoProducer>
-                    <RewardForTouchingBlockType>
-                        <Block reward="100.0" type="redstone_block" behaviour="onceOnly"/>
-                        <Block reward="20.0" type="glowstone"/>
-                        <Block reward="10.0" type="stone" variant="smooth_diorite"/>
-                    </RewardForTouchingBlockType>
-                    <RewardForSendingCommand reward="-1"/>
-                </AgentHandlers>
-            </AgentSection>
-
-        </Mission>'''
+    def GetMissionXML(self):
+        # mission_file = '../Sample_missions/tricky_arena_1.xml'
+        # mission_file = '../Sample_missions/eating_1.xml'
+        # mission_file = '../Sample_missions/default_world_1.xml'
+        # mission_file = '../Sample_missions/default_flat_1.xml'
+        # mission_file = '../Sample_missions/cliff_walking_1.xml'
+        # mission_file = '../Sample_missions/mazes/maze_2.xml'
+        # mission_file = '../Sample_missions/mazes/maze_1.xml'
+        # mission_file = '../Sample_missions/classroom/vertical.xml'
+        # mission_file = '../Sample_missions/classroom/simpleRoomMaze.xml'
+        # mission_file = '../Sample_missions/classroom/obstacles.xml'
+        # mission_file = '../Sample_missions/classroom/medium.xml'
+        # mission_file = '../Sample_missions/classroom/hard.xml'
+        # mission_file = '../Sample_missions/classroom/complexity_usage.xml'
+        # mission_file = '../Sample_missions/classroom/attic.xml'
+        # mission_file = '../Sample_missions/classroom/basic.xml'
+        mission_file = './maze_mission.xml'
+        with open(mission_file, 'r') as f:
+            print "Loading mission from %s" % mission_file
+            mission_xml = f.read()
+        return mission_xml
 
     def take_action(self, action):
         if(self.world_state.is_mission_running):
@@ -270,30 +203,43 @@ class environment():
 
 def testing_function():
     maze_env = environment()
-    maze_env.get_maze()
+    maze_env.get_env()
     total_num_actions_taken = 0
     frames_buffer = []
-    for i in range(150):
-        a = np.random.choice(list(maze_env.action_dict.keys()))
-        action_result = maze_env.take_action(a)
-        if(action_result):
-            is_terminal = action_result[2]
-            if(not(is_terminal)):
-                s1 = action_result[0]
-                frames_buffer.append(s1)
-                r = action_result[1]
-                total_num_actions_taken +=1
-            else:
-                print('Terminal state reached.....')
-                s1 = action_result[0]
-                frames_buffer.append(s1)
-                r = action_result[1]
-            print(s1)
-            print(r)
-            print(is_terminal)
 
-    print('Total num actions taken is '+str(total_num_actions_taken))
-    print('Length of total frames is '+str(len(frames_buffer)))
+    # Loop until mission ends:
+    while maze_env.world_state.is_mission_running:
+        sys.stdout.write(".")
+        time.sleep(0.1)
+        maze_env.world_state = maze_env.agent_host.getWorldState()
+        for error in maze_env.world_state.errors:
+            print("Error:"+error.text)
+
+
+    print "Mission ended"
+    # Mission has ended.
+
+    # for i in range(150):
+    #     a = np.random.choice(list(maze_env.action_dict.keys()))
+    #     action_result = maze_env.take_action(a)
+    #     if(action_result):
+    #         is_terminal = action_result[2]
+    #         if(not(is_terminal)):
+    #             s1 = action_result[0]
+    #             frames_buffer.append(s1)
+    #             r = action_result[1]
+    #             total_num_actions_taken +=1
+    #         else:
+    #             print('Terminal state reached.....')
+    #             s1 = action_result[0]
+    #             frames_buffer.append(s1)
+    #             r = action_result[1]
+    #         print(s1)
+    #         print(r)
+    #         print(is_terminal)
+    #
+    # print('Total num actions taken is '+str(total_num_actions_taken))
+    # print('Length of total frames is '+str(len(frames_buffer)))
 
 if(__name__=='__main__'):
     testing_function()
