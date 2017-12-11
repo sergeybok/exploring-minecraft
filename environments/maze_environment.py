@@ -83,7 +83,8 @@ class environment():
                 raise
 
         self.curr_episode_num = 0
-        self.action_dict = {0: 'move 0.3', 1: 'move 0', 2: 'move -0.3', 3: 'turn 0.1', 4: 'turn 0', 5: 'turn -0.1'}
+        # self.action_dict = {0: 'move 0.3', 1: 'move 0', 2: 'move -0.3', 3: 'turn 0.1', 4: 'turn 0', 5: 'turn -0.1'}
+        self.action_dict = {0:"movenorth 1", 1:"movesouth 1", 2:"movewest 1", 3:"moveeast 1"}
         # self.action_dict = {0:['move 0.3', 'move 0'], 1:['move -0.3', 'move 0'], 2:['turn 0.1', 'turn 0'], 3:['turn -0.1', 'turn 0']}
         self.total_num_actions = len(self.action_dict)
 
@@ -161,6 +162,7 @@ class environment():
                     <Placement x="-204" y="81" z="217"/>
                 </AgentStart>
                 <AgentHandlers>
+                    <DiscreteMovementCommands/>
                     <VideoProducer want_depth="'''+str(self.want_depth_channel)+'''">
                         <Width>''' + str(self.video_width) + '''</Width>
                         <Height>''' + str(self.video_height) + '''</Height>
@@ -171,11 +173,6 @@ class environment():
                         <Block reward="10.0" type="stone" variant="smooth_diorite"/>
                     </RewardForTouchingBlockType>
                     <RewardForSendingCommand reward="-1"/>
-                    <ContinuousMovementCommands turnSpeedDegs="840">
-                        <ModifierList type="deny-list"> <!-- Example deny-list: prevent agent from strafing -->
-                            <command>strafe</command>
-                        </ModifierList>
-                    </ContinuousMovementCommands>
                 </AgentHandlers>
             </AgentSection>
 
@@ -268,6 +265,8 @@ class environment():
 def testing_function():
     maze_env = environment()
     maze_env.get_maze()
+    total_num_actions_taken = 0
+    frames_buffer = []
     for i in range(150):
         a = np.random.choice(list(maze_env.action_dict.keys()))
         action_result = maze_env.take_action(a)
@@ -275,14 +274,20 @@ def testing_function():
             is_terminal = action_result[2]
             if(not(is_terminal)):
                 s1 = action_result[0]
+                frames_buffer.append(s1)
                 r = action_result[1]
+                total_num_actions_taken +=1
             else:
                 print('Terminal state reached.....')
                 s1 = action_result[0]
+                frames_buffer.append(s1)
                 r = action_result[1]
             print(s1)
             print(r)
             print(is_terminal)
+
+    print('Total num actions taken is '+str(total_num_actions_taken))
+    print('Length of total frames is '+str(len(frames_buffer)))
 
 if(__name__=='__main__'):
     testing_function()
