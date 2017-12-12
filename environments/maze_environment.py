@@ -44,9 +44,9 @@ class environment():
         # but instead walks in a diagonal shortest path to the goal. For value 2.0 there are no walking blocks except for the optimal path, i.e the floor is all empty but for the optimal path and the optimal path
         # is a straight line to the final goal and the agent follows this optimal path. The gap block doesn't necessarily have to be air, it can be defined as lapis_ore or anything else as well.
 
-        # self.video_width = 432
+        # self.video_width = 256
         self.video_width = 84
-        # self.video_height = 240
+        # self.video_height = 256
         self.video_height = 84
         self.want_depth_channel = 'false'
         if(self.want_depth_channel=='false'):

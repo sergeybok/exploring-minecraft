@@ -162,8 +162,10 @@ e = startE
 stepDrop = (startE - endE) / annealing_steps
 
 # create lists to contain total rewards and steps per episode
-jList = []
-rList = []
+steps_taken_per_episode_list = []
+reward_per_episode_list = []
+mean_reward_window_len = 10
+mean_reward_per_episode_window_list = []
 total_steps = 0
 
 # Make a path for our model to be saved in.
@@ -172,6 +174,8 @@ if not os.path.exists(path):
 
 curr_episode_total_reward_placeholder = tf.placeholder(tf.float32, name='curr_episode_total_reward')
 curr_episode_reward_summary = tf.summary.scalar("curr_episode_total_reward", curr_episode_total_reward_placeholder)
+mean_reward_over_window_placeholder = tf.placeholder(tf.float32, name='mean_reward_over_window')
+mean_reward_over_window_summary = tf.summary.scalar("mean_reward_over_window", mean_reward_over_window_placeholder)
 with tf.Session() as sess:
     writer_op = tf.summary.FileWriter('./tf_graphs', sess.graph)
     sess.run(init)
@@ -180,19 +184,19 @@ with tf.Session() as sess:
         print('Loading Model...')
         ckpt = tf.train.get_checkpoint_state(path)
         saver.restore(sess, ckpt.model_checkpoint_path)
-    for i in range(num_episodes):
+    for episode_num in range(num_episodes):
         curr_episode_total_reward = 0
         maze_env.get_maze()
         episodeBuffer = experience_buffer()
         s = maze_env.get_current_state()
         is_terminal_flag = False
-        j = 0
+        steps_taken_per_episode = 0
         # The Q-Network
         #NOTE ::: We can condition the below while loop on either a pre-defined number of maximum action or wait for the environment episode to get over when the agent runs out of the mission time.
         #NOTE ::: I have conditioned the while loop on the mission time.
-        # while j < max_epLength:  # If the agent takes longer than 50 moves to reach the end of the maze, end the trial.
+        # while steps_taken_per_episode < max_epLength:  # If the agent takes longer than 50 moves to reach the end of the maze, end the trial.
         while(maze_env.world_state.is_mission_running):
-            j += 1
+            steps_taken_per_episode += 1
             # Choose an action by greedily (with e chance of random action) from the Q-network
             if np.random.rand(1) < e or total_steps < pre_train_steps:
                 a = np.random.randint(0, total_num_actions)
@@ -215,9 +219,6 @@ with tf.Session() as sess:
             curr_episode_total_reward += r
             s = s1
 
-            summary_val, = sess.run([curr_episode_reward_summary], feed_dict={curr_episode_total_reward_placeholder: curr_episode_total_reward})
-            writer_op.add_summary(summary_val, i+1)
-
             if total_steps > pre_train_steps:
                 # NOTE::: We are reducing the epsilon of exploration after every action we take, not after every episode, so the epsilon decreases within 1 episode
                 if e > endE:
@@ -227,7 +228,7 @@ with tf.Session() as sess:
                 break
 
         if total_steps > pre_train_steps:
-            if (i % (update_freq_per_episodes) == 0 and i > 0):
+            if (episode_num % (update_freq_per_episodes) == 0 and episode_num > 0):
                 for batch_num in range(10):
                     # print('current overall experience buffer size is '+str(len(myBuffer.buffer)))
                     # print('sample a batch size of '+str(batch_size))
@@ -243,37 +244,42 @@ with tf.Session() as sess:
                     # Update the network with our target values.
                     # NOTE ::: it is important to recalculate the Q values of the states in the experience replay and then get the gradient w.r.t difference b/w recalculated values and targets
                     # NOTE ::: otherwise it defeats the purpose of experience replay, also we are not storing the Q values for this reason
-                    _ = sess.run(mainQN.train_op,
-                                 feed_dict={mainQN.flattened_image: np.vstack(trainBatch[:, 0]), mainQN.targetQ: targetQ,
-                                            mainQN.actions: trainBatch[:, 1]})
+                    _ = sess.run(mainQN.train_op, feed_dict={mainQN.flattened_image: np.vstack(trainBatch[:, 0]), mainQN.targetQ: targetQ, mainQN.actions: trainBatch[:, 1]})
                     updateTarget(targetOps, sess)  # Update the target network toward the primary network.
 
-        print('Episode : '+str(i)+' Total reward : '+str(curr_episode_total_reward)+' Total steps : '+str(j))
+        print('Episode : '+str(episode_num)+' Total reward : '+str(curr_episode_total_reward)+' Total steps : '+str(steps_taken_per_episode))
         myBuffer.add(episodeBuffer.buffer)
-        jList.append(j)
-        rList.append(curr_episode_total_reward)
+        summary_val, = sess.run([curr_episode_reward_summary], feed_dict={curr_episode_total_reward_placeholder: curr_episode_total_reward})
+        writer_op.add_summary(summary_val, episode_num + 1)
+        reward_per_episode_list.append(curr_episode_total_reward)
+        mean_reward_over_window = sum(reward_per_episode_list[-mean_reward_window_len:]) / min(len(reward_per_episode_list), mean_reward_window_len)
+        summary_val, = sess.run([mean_reward_over_window_summary], feed_dict={mean_reward_over_window_placeholder: mean_reward_over_window})
+        writer_op.add_summary(summary_val, episode_num + 1)
+        mean_reward_per_episode_window_list.append(mean_reward_over_window)
+        steps_taken_per_episode_list.append(steps_taken_per_episode)
         # Periodically save the model.
-        if(i % model_saving_freq == 0 and i>0):
-            saver.save(sess, path + '/model-' + str(i) + '.ckpt')
-            print("Saved Model after episode : "+str(i))
-        if len(rList) % 10 == 0:
-            print(total_steps, np.mean(rList[-10:]), e)
-    saver.save(sess, path + '/model-' + str(i) + '.ckpt')
+        if(episode_num % model_saving_freq == 0 and episode_num>0):
+            saver.save(sess, path + '/model-' + str(episode_num) + '.ckpt')
+            print("Saved Model after episode : "+str(episode_num))
+        if len(reward_per_episode_list) % 10 == 0:
+            print('Total steps taken till now, mean reward per episode, current epsilon :::::: ')
+            print(str(total_steps)+', '+str(np.mean(reward_per_episode_list))+', '+str(e))
+    saver.save(sess, path + '/model-' + str(episode_num) + '.ckpt')
     writer_op.close()
-print("Percent of succesful episodes: " + str(sum(rList) / num_episodes) + "%")
+print("Percent of succesful episodes: " + str(sum(reward_per_episode_list) / num_episodes) + "%")
 
 # ### Checking network learning
 # Mean reward over time
 
-rList = np.array(rList)
-rMean = np.average(rList)
+reward_per_episode_list = np.array(reward_per_episode_list)
+rMean = np.average(reward_per_episode_list)
 print('Mean reward is '+str(rMean))
 
 results_file_name = 'DQN_results.pickle'
 fp = open(results_file_name, 'w')
-results_dict = {'reward_per_episode_list':rList}
+results_dict = {'reward_per_episode_list':reward_per_episode_list, 'mean_reward_per_episode_window_list':mean_reward_per_episode_window_list, 'steps_taken_per_episode_list':steps_taken_per_episode_list}
 pickle.dump(results_dict, fp)
 fp.close()
 
-plt.plot(rList)
+plt.plot(reward_per_episode_list)
 
