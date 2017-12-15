@@ -43,13 +43,13 @@ def Deconv(input, height, width,network_name,in_channel=64,out_channel=3):
 
 	dconv1 = slim.conv2d_transpose(inputs=img,num_outputs=64,stride=[1,1],
 							kernel_size=[5,5],activation_fn=tf.nn.elu,
-							padding='VALID',reuse=True,scope=(scope+'_1'))
+							padding='VALID',scope=(scope+'_1'))
 	dconv2 = slim.conv2d_transpose(inputs=dconv1,num_outputs=32,stride=[2,2],
 							kernel_size=[4,4],activation_fn=tf.nn.elu,
-							padding='VALID',reuse=True,scope=(scope+'_2'))
+							padding='VALID',scope=(scope+'_2'))
 	dconv3 = slim.conv2d_transpose(inputs=dconv2,num_outputs=3,stride=[4,4],
 							kernel_size=[8,8],activation_fn=tf.nn.elu,
-							padding='VALID',reuse=True,scope=(scope+'_3'))
+							padding='VALID',scope=(scope+'_3'))
 	#dconv4 = slim.conv2d_transpose(inputs=dconv3,num_outputs=out_channel,
 	#						stride=[4,4],kernel_size=[8,8],activation_fn=tf.nn.sigmoid,
 	#						padding='VALID',reuse=True,scope=(scope+'_4'))
@@ -64,16 +64,14 @@ def Predictor(state, action, height, width, network_name, state_size=1600):
 	#state_size = tf.shape(state)[1]
 
 	deconv_input_state = slim.fully_connected(
-						inputs=state,
-						num_outputs=state_size,
-						activation_fn=tf.nn.sigmoid,
-						reuse=True,
-						scope=(scope+'_state')) 
+							inputs=state,
+							num_outputs=state_size,
+							activation_fn=tf.nn.sigmoid,
+							scope=(scope+'_state'))
 	deconv_input_action1 = slim.fully_connected(
 							inputs=action,
 							num_outputs=state_size,
 							activation_fn=tf.nn.tanh,
-							reuse=True,
 							scope=(scope+'_action1'))
 
 	deconv_input = deconv_input_state * deconv_input_action1

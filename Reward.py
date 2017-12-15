@@ -23,15 +23,18 @@ class Compressor:
 
 		self.predictor_loss = tf.reduce_mean(tf.square(self.state_tp1 - self.prediction))
 		self.optimizer = tf.train.AdamOptimizer(learning_rate=0.0001)
-		gvs = self.optimizer.compute_gradients(self.loss)
-		capped_gvs = [(tf.clip_by_norm(grad, 10.0), var) for grad, var in gvs]
+		gvs = self.optimizer.compute_gradients(self.predictor_loss)
+		#if gvs == None:
+		#	print ('helll oooo ooo ======')
+		#capped_gvs = [(tf.clip_by_norm(grad, 10.0), var) for grad, var in gvs]
+		capped_gvs = gvs
 		self.train_pred = self.optimizer.apply_gradients(capped_gvs)
 
 
 	def train(self,sess,states, actions, states_tp1):
 		_, loss = sess.run([self.train_pred, self.predictor_loss],{self.state:states,self.action:actions,self.state_tp1:states_tp1})
 		return loss
-		
+
 
 	def predict_next_state(self,sess,states,actions):
 		return sess.run([self.prediction],{self.state:states,self.action:actions})

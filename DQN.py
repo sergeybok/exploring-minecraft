@@ -223,7 +223,7 @@ with tf.Session() as sess:
                 pred_tm1 = curiosity.predict_next_state(sess,state_sample,action_sample)
                 l = curiosity.train(sess,state_sample, action_sample, state_tp1)
                 pred_t = curiosity.predict_next_state(sess,state_sample,action_sample)
-                intrinsic_r = curiosity.get_reward(pred_t,pred_tm1,state_tp1)
+                intrinsic_r = curiosity.get_reward(predictions_t=pred_t,predictions_tm1=pred_tm1,targets=state_tp1)
                 r += intrinsic_r
 
             curr_episode_total_reward += r
