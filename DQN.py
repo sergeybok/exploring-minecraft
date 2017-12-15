@@ -7,12 +7,14 @@ import os
 import pickle
 
 import Perception
+import Reward
 
 # from environments import maze_environment
 import maze_environment
 
 
 use_intrinsic_reward = True
+historical_sample_size = 100
 
 
 class Qnetwork():
@@ -142,7 +144,7 @@ mainQN = Qnetwork(frame_height=frame_height, frame_width=frame_width, frame_chan
 targetQN = Qnetwork(frame_height=frame_height, frame_width=frame_width, frame_channels=frame_channels, total_num_actions=total_num_actions, network_name='target')
 
 if use_intrinsic_reward:
-    compressor = Reward.Compressor(frame_height=frame_height, frame_width=frame_width, frame_channels=frame_channels, 
+    curiosity = Reward.Compressor(frame_height=frame_height, frame_width=frame_width, frame_channels=frame_channels, 
                                     total_num_actions=total_num_actions, network_name='compressor')
 
 init = tf.global_variables_initializer()
@@ -212,6 +214,18 @@ with tf.Session() as sess:
             total_steps += 1
             episodeBuffer.add(np.reshape(np.array([s, a, r, s1, is_terminal_flag]), [1, 5]))  # Save the experience to our episode buffer.
             # Since we have 5 elements in the experience : s, a, r, s1, is_terminal_flag, therefore we reshape it as [size, 5]
+            
+            if use_intrinsic_reward:
+                sample_ = episodeBuffer.sample(historical_sample_size)
+                state_sample = sample_[:,0]
+                action_sample = sample_[:,1]
+                state_tp1 = sample_[:,3]
+                pred_tm1 = curiosity.predict_next_state(sess,state_sample,action_sample)
+                l = curiosity.train(sess,state_sample, action_sample, state_tp1)
+                pred_t = curiosity.predict_next_state(sess,state_sample,action_sample)
+                intrinsic_r = curiosity.get_reward(pred_t,pred_tm1,state_tp1)
+                r += intrinsic_r
+
             curr_episode_total_reward += r
             s = s1
 

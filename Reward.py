@@ -29,8 +29,9 @@ class Compressor:
 
 
 	def train(self,sess,states, actions, states_tp1):
-		sess.run([self.train_pred],{self.state:states,self.action:actions,self.state_tp1:states_tp1})
-
+		_, loss = sess.run([self.train_pred, self.predictor_loss],{self.state:states,self.action:actions,self.state_tp1:states_tp1})
+		return loss
+		
 
 	def predict_next_state(self,sess,states,actions):
 		return sess.run([self.prediction],{self.state:states,self.action:actions})
@@ -39,9 +40,9 @@ class Compressor:
 	def get_reward(self,predictions_t,predictions_tm1,targets):
 		loss_tm1 = np.mean(np.square(predictions_tm1 - targets))
 		loss_t = np.mean(np.square(predictions_t - targets))
-
-		improvement = np.abs(loss_tm1 - loss_t)
-
+		improvement = (loss_tm1 - loss_t)
+		if improvement < 0 :
+			return 0
 		return improvement
 
 
