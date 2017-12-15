@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 import os
 import pickle
 
+import Perception
+
 # from environments import maze_environment
 import maze_environment
 
@@ -16,21 +18,19 @@ class Qnetwork():
         #[batch, in_height, in_width, in_channels]
         #[filter_height, filter_width, in_channels, out_channels]
         # Must have strides[0] = strides[3] = 1. For the most common case of the same horizontal and vertices strides, strides = [1, stride, stride, 1].
-        self.reshaped_image = tf.reshape(self.flattened_image, shape=[-1, frame_height, frame_width, frame_channels])
-        self.conv1 = self.conv_layer(input_volume=self.reshaped_image, num_output_channel=32, filter_shape=[8, 8], strides_shape=[1, 4, 4, 1], padding_type='VALID', network_name=network_name, layer_name='1')
-        self.conv2 = self.conv_layer(input_volume=self.conv1, num_output_channel=64, filter_shape=[4, 4], strides_shape=[1, 2, 2, 1], padding_type='VALID', network_name=network_name, layer_name='2')
-        self.conv3 = self.conv_layer(input_volume=self.conv2, num_output_channel=64, filter_shape=[3, 3], strides_shape=[1, 1, 1, 1], padding_type='VALID', network_name=network_name, layer_name='3')
+        #self.reshaped_image = tf.reshape(self.flattened_image, shape=[-1, frame_height, frame_width, frame_channels])
+        #self.conv1 = self.conv_layer(input_volume=self.reshaped_image, num_output_channel=32, filter_shape=[8, 8], strides_shape=[1, 4, 4, 1], padding_type='VALID', network_name=network_name, layer_name='1')
+        #self.conv2 = self.conv_layer(input_volume=self.conv1, num_output_channel=64, filter_shape=[4, 4], strides_shape=[1, 2, 2, 1], padding_type='VALID', network_name=network_name, layer_name='2')
+        #self.conv3 = self.conv_layer(input_volume=self.conv2, num_output_channel=64, filter_shape=[3, 3], strides_shape=[1, 1, 1, 1], padding_type='VALID', network_name=network_name, layer_name='3')
         # self.conv4 = self.conv_layer(input_volume=self.conv3, num_output_channel=64, filter_shape=[3, 3], strides_shape=[1, 1, 1, 1], padding_type='VALID', network_name=network_name, layer_name='4')
 
-        # self.reshaped_image = tf.reshape(self.flattened_image, shape=[-1, frame_height, frame_width, frame_channels])
-        # self.conv1 = slim.conv2d(inputs=self.reshaped_image, num_outputs=32, kernel_size=[8, 8], stride=[4, 4], padding='VALID', biases_initializer=None)
-        # self.conv2 = slim.conv2d(inputs=self.conv1, num_outputs=64, kernel_size=[4, 4], stride=[2, 2], padding='VALID', biases_initializer=None)
-        # self.conv3 = slim.conv2d(inputs=self.conv2, num_outputs=64, kernel_size=[3, 3], stride=[1, 1], padding='VALID', biases_initializer=None)
-        # self.conv4 = slim.conv2d(inputs=self.conv3, num_outputs=num_final_layer_output_channel, kernel_size=[7, 7], stride=[1, 1], padding='VALID', biases_initializer=None)
+        self.state_vector = Perception.CNN(input=self.flattened_image,height=frame_height,width=frame_width,
+                                            in_channel=3,out_channel=64,network_name=network_name)
+
 
         #NOTE :::: Split is not really required, also even if you use split, it should be done on the dimension of feature maps. Also the weight matrices have to be correctly shaped.
-        self.streamAC = self.conv3
-        self.streamVC = self.conv3
+        self.streamAC = self.state_vector
+        self.streamVC = self.state_vector
         self.streamA = tf.contrib.layers.flatten(self.streamAC)
         self.streamV = tf.contrib.layers.flatten(self.streamVC)
         xavier_init = tf.contrib.layers.xavier_initializer()
@@ -74,20 +74,6 @@ class Qnetwork():
             # self.train_op = self.optimizer.minimize(self.loss)
 
 
-    def conv_layer(self, input_volume = None, num_output_channel = None, filter_shape = None, strides_shape = None, padding_type = None, network_name=None, layer_name = None,):
-        std_dev = 0.1
-        W_shape = [filter_shape[0], filter_shape[1], input_volume.shape[3].value, num_output_channel]
-        W = tf.Variable(tf.truncated_normal(W_shape, stddev=std_dev), name=network_name+'_Filter_'+layer_name)
-        b_shape = [num_output_channel]
-        b = tf.Variable(tf.constant(0.1, shape=b_shape), name=network_name+'_bias_'+layer_name)
-        conv = tf.nn.conv2d(input_volume, W, strides_shape, padding=padding_type, name=network_name+'_Conv_'+layer_name)
-        conv = conv + b
-        relu = tf.nn.elu(conv, name=network_name+'_ReLU_'+layer_name)
-        # relu = tf.nn.relu(conv, name=network_name+'_ReLU_'+layer_name)
-        return relu
-        # pool1_ksize = [1, 2, 2, 1]
-        # strides_pool1 = [1, 2, 2, 1]
-        # max_pool1 = tf.nn.max_pool(relu1, pool1_ksize, strides_pool1, padding='SAME', name='Pool1')
 
 # ### Experience Replay
 # This class allows us to store experiences and sample then randomly to train the network.
