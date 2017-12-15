@@ -6,27 +6,44 @@ import Perception
 
 
 
-def Evaluate_Predictor(states, actions,state_size, window_size,ht,wd,out_channel,network_name):
-	# evaluates the accuracy of the predictor on cached history
-	predictions = [None]*window_size
-	for i in range(window_size):
-		predictions[i] = Perception.Predictor(states[i],state_size,actions[i],
-									ht,wd,out_channel,network_name)
-	
-	return predictions
+class Compressor:
+
+	def __init__(self,frame_height=None, frame_width=None, frame_channels=None,state_size=3136, total_num_actions=None, network_name=None):
+
+		self.state = tf.placeholder(tf.float32,shape=[None,state_size])
+		self.action = tf.placeholder(tf.float32,shape=[None,total_num_actions])
+		self.state_tp1 = tf.placeholder(tf.float32,shape=[None,frame_height,frame_width,frame_channels])
+
+		self.prediction = Perception.Predictor(state=self.state,
+												state_size=state_size,
+												action=self.action,
+												height=frame_height,
+												width=frame_width,
+												network_name='Compressor')
+
+		self.predictor_loss = tf.reduce_mean(tf.square(self.state_tp1 - self.prediction))
+		self.optimizer = tf.train.AdamOptimizer(learning_rate=0.0001)
+		gvs = self.optimizer.compute_gradients(self.loss)
+		capped_gvs = [(tf.clip_by_norm(grad, 10.0), var) for grad, var in gvs]
+		self.train_pred = self.optimizer.apply_gradients(capped_gvs)
 
 
+	def train(self,sess,states, actions, states_tp1):
+		sess.run([self.train_pred],{self.state:states,self.action:actions,self.state_tp1:states_tp1})
 
 
-def Get_Intrinsic_Reward(predictions_t, predictions_tm1,frames,window_size):
-
-	reward = tf.reduce_mean(tf.square(predictions_tm1[0]-frames[0])) - tf.reduce_mean(tf.square(predictions_t[0]-frames[0]))
-
-	for i in range(1,window_size):
-		reward += tf.reduce_mean(tf.square(predictions_tm1[i]-frames[i])) - tf.reduce_mean(tf.square(predictions_t[i]-frames[i]))
+	def predict_next_state(self,sess,states,actions):
+		return sess.run([self.prediction],{self.state:states,self.action:actions})
 
 
-	return reward 
+	def get_reward(self,predictions_t,predictions_tm1,targets):
+		loss_tm1 = np.mean(np.square(predictions_tm1 - targets))
+		loss_t = np.mean(np.square(predictions_t - targets))
+
+		improvement = np.abs(loss_tm1 - loss_t)
+
+		return improvement
+
 
 
 

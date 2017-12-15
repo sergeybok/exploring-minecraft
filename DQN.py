@@ -11,6 +11,10 @@ import Perception
 # from environments import maze_environment
 import maze_environment
 
+
+use_intrinsic_reward = True
+
+
 class Qnetwork():
     def __init__(self, frame_height=None, frame_width=None, frame_channels=None, total_num_actions=None, network_name=None):
         flattened_frame_size = frame_height*frame_width*frame_channels
@@ -137,6 +141,10 @@ total_num_actions = maze_env.total_num_actions
 mainQN = Qnetwork(frame_height=frame_height, frame_width=frame_width, frame_channels=frame_channels, total_num_actions=total_num_actions, network_name='main')
 targetQN = Qnetwork(frame_height=frame_height, frame_width=frame_width, frame_channels=frame_channels, total_num_actions=total_num_actions, network_name='target')
 
+if use_intrinsic_reward:
+    compressor = Reward.Compressor(frame_height=frame_height, frame_width=frame_width, frame_channels=frame_channels, 
+                                    total_num_actions=total_num_actions, network_name='compressor')
+
 init = tf.global_variables_initializer()
 saver = tf.train.Saver()
 trainables = tf.trainable_variables()
@@ -162,6 +170,8 @@ curr_episode_total_reward_placeholder = tf.placeholder(tf.float32, name='curr_ep
 curr_episode_reward_summary = tf.summary.scalar("curr_episode_total_reward", curr_episode_total_reward_placeholder)
 mean_reward_over_window_placeholder = tf.placeholder(tf.float32, name='mean_reward_over_window')
 mean_reward_over_window_summary = tf.summary.scalar("mean_reward_over_window", mean_reward_over_window_placeholder)
+
+
 with tf.Session() as sess:
     writer_op = tf.summary.FileWriter('./tf_graphs', sess.graph)
     sess.run(init)
