@@ -70,13 +70,14 @@ def Predictor(state, state_size, action, height, width,
 						activation_fn=tf.nn.sigmoid,
 						reuse=True,
 						scope=(scope+'_state')) 
-	deconv_input_action = slim.fully_connected(
+	deconv_input_action1 = slim.fully_connected(
 							inputs=action,
 							num_outputs=state_size,
 							activation_fn=tf.nn.tanh,
 							reuse=True,
-							scope=(scope+'_action'))
-	deconv_input = deconv_input_state + deconv_input_action
+							scope=(scope+'_action1'))
+
+	deconv_input = deconv_input_state * deconv_input_action1
 	
 	return Deconv(deconv_input,height,width,state_size,out_channel,network_name)
 
