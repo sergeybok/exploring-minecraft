@@ -24,19 +24,9 @@ class Qnetwork():
         #[batch, in_height, in_width, in_channels]
         #[filter_height, filter_width, in_channels, out_channels]
         # Must have strides[0] = strides[3] = 1. For the most common case of the same horizontal and vertices strides, strides = [1, stride, stride, 1].
-        #self.reshaped_image = tf.reshape(self.flattened_image, shape=[-1, frame_height, frame_width, frame_channels])
-        #self.conv1 = self.conv_layer(input_volume=self.reshaped_image, num_output_channel=32, filter_shape=[8, 8], strides_shape=[1, 4, 4, 1], padding_type='VALID', network_name=network_name, layer_name='1')
-        #self.conv2 = self.conv_layer(input_volume=self.conv1, num_output_channel=64, filter_shape=[4, 4], strides_shape=[1, 2, 2, 1], padding_type='VALID', network_name=network_name, layer_name='2')
-        #self.conv3 = self.conv_layer(input_volume=self.conv2, num_output_channel=64, filter_shape=[3, 3], strides_shape=[1, 1, 1, 1], padding_type='VALID', network_name=network_name, layer_name='3')
-        # self.conv4 = self.conv_layer(input_volume=self.conv3, num_output_channel=64, filter_shape=[3, 3], strides_shape=[1, 1, 1, 1], padding_type='VALID', network_name=network_name, layer_name='4')
 
         self.state_feature_vector = Perception.CNN(input=self.flattened_image,height=frame_height,width=frame_width,
                                             in_channel=3,out_channel=64,network_name=network_name)
-        #self.reshaped_image = tf.reshape(self.flattened_image, shape=[-1, frame_height, frame_width, frame_channels])
-        #self.conv1 = self.conv_layer(input_volume=self.reshaped_image, num_output_channel=32, filter_shape=[8, 8], strides_shape=[1, 4, 4, 1], padding_type='VALID', network_name=network_name, layer_name='1')
-        #self.conv2 = self.conv_layer(input_volume=self.conv1, num_output_channel=64, filter_shape=[4, 4], strides_shape=[1, 2, 2, 1], padding_type='VALID', network_name=network_name, layer_name='2')
-        #self.state_feature_vector = self.conv_layer(input_volume=self.conv2, num_output_channel=64, filter_shape=[5, 5], strides_shape=[1, 1, 1, 1], padding_type='VALID', network_name=network_name, layer_name='3')
-        
 
         #NOTE :::: Split is not really required, also even if you use split, it should be done on the dimension of feature maps. Also the weight matrices have to be correctly shaped.
         self.streamAC = self.state_feature_vector
@@ -139,11 +129,11 @@ def updateTarget(op_holder, sess):
 # Setting all the training parameters
 batch_size = 100  # How many experiences to use for each training step.
 update_freq_per_episodes = 1  # How often to perform a training step.
-gamma_discount_factor = .99  # Discount factor on the target Q-values
+gamma_discount_factor = .9999  # Discount factor on the target Q-values
 startE = 0.5  # Starting chance of random action
 endE = 0.05  # Final chance of random action
 annealing_steps = 5000.  # How many steps of training to reduce startE to endE.
-num_episodes = 3 # How many episodes of game environment to train network with.
+num_episodes = 10 # How many episodes of game environment to train network with.
 pre_train_steps = 100  # How many steps of random actions before training begins.
 # max_epLength = 500  # The max allowed length of our episode.
 load_model = False  # Whether to load a saved model.
@@ -282,18 +272,11 @@ for episode_num in range(num_episodes):
             # action_sample = np.vstack(sample_[:,1]).astype(np.uint8)
             action_sample = sample_[:,1]
             state_tp1 = np.vstack(sample_[:,3])
-            #print(state_feature_sample.shape)
-            #print(state_feature_sample[0])
-            #print(action_sample.shape)
-            # pred_tm1 = curiosity.predict_next_state(sess_Frame_Predictor,
-            #                                 np.asarray(state_feature_sample).astype(np.float32),
-            #                                 np.asarray(action_sample).astype(np.float32))
 
             pred_tm1 = curiosity.predict_next_state(sess_Frame_Predictor,
                                             state_feature_sample,
                                             action_sample)
             l = curiosity.train(sess_Frame_Predictor,state_feature_sample, action_sample, state_tp1)
-            print('loss is {0}'.format(l))
             pred_t = curiosity.predict_next_state(sess_Frame_Predictor,state_feature_sample,action_sample)
             intrinsic_r = curiosity.get_reward(predictions_t=pred_t,predictions_tm1=pred_tm1,targets=state_tp1)
             r += intrinsic_r
@@ -317,9 +300,6 @@ for episode_num in range(num_episodes):
     if total_steps > pre_train_steps:
         if (episode_num % (update_freq_per_episodes) == 0 and episode_num > 0):
             for batch_num in range(10):
-                print('Training the Q Network')
-                # print('current overall experience buffer size is '+str(len(myBuffer.buffer)))
-                # print('sample a batch size of '+str(batch_size))
                 trainBatch, actual_sampled_size = myBuffer.sample(batch_size)  # Get a random batch of experiences.
                 # Below we perform the Double-DQN update to the target Q-values
                 Q1 = sess_QNetwork.run(mainQN.predict, feed_dict={mainQN.flattened_image: np.vstack(trainBatch[:, 3])})
