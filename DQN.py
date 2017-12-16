@@ -139,6 +139,8 @@ path = "./dqn_model"  # The path to save our model to.
 model_saving_freq = 10
 # h_size = 512  # The size of the final convolutional layer before splitting it into Advantage and Value streams.
 tau = 0.001  # Rate to update target network toward primary network
+num_previous_frames = 4
+previous_frames = []
 
 #TODO why is reset default graph required??
 tf.reset_default_graph()
@@ -184,11 +186,12 @@ with tf.Session() as sess:
         print('Loading Model...')
         ckpt = tf.train.get_checkpoint_state(path)
         saver.restore(sess, ckpt.model_checkpoint_path)
-    for episode_num in range(num_episodes):
+    for episode_num in range(1, num_episodes+1):
         curr_episode_total_reward = 0
         maze_env.get_maze()
         episodeBuffer = experience_buffer()
         s = maze_env.get_current_state()
+        # previous_frames = for
         is_terminal_flag = False
         steps_taken_per_episode = 0
         # The Q-Network
@@ -227,8 +230,9 @@ with tf.Session() as sess:
             if is_terminal_flag == True:
                 break
 
+        # if(False):
         if total_steps > pre_train_steps:
-            if (episode_num % (update_freq_per_episodes) == 0 and episode_num > 0):
+            if (episode_num % (update_freq_per_episodes) == 0):
                 for batch_num in range(10):
                     # print('current overall experience buffer size is '+str(len(myBuffer.buffer)))
                     # print('sample a batch size of '+str(batch_size))
@@ -250,15 +254,15 @@ with tf.Session() as sess:
         print('Episode : '+str(episode_num)+' Total reward : '+str(curr_episode_total_reward)+' Total steps : '+str(steps_taken_per_episode))
         myBuffer.add(episodeBuffer.buffer)
         summary_val, = sess.run([curr_episode_reward_summary], feed_dict={curr_episode_total_reward_placeholder: curr_episode_total_reward})
-        writer_op.add_summary(summary_val, episode_num + 1)
+        writer_op.add_summary(summary_val, episode_num)
         reward_per_episode_list.append(curr_episode_total_reward)
         mean_reward_over_window = sum(reward_per_episode_list[-mean_reward_window_len:]) / min(len(reward_per_episode_list), mean_reward_window_len)
         summary_val, = sess.run([mean_reward_over_window_summary], feed_dict={mean_reward_over_window_placeholder: mean_reward_over_window})
-        writer_op.add_summary(summary_val, episode_num + 1)
+        writer_op.add_summary(summary_val, episode_num)
         mean_reward_per_episode_window_list.append(mean_reward_over_window)
         steps_taken_per_episode_list.append(steps_taken_per_episode)
         # Periodically save the model.
-        if(episode_num % model_saving_freq == 0 and episode_num>0):
+        if(episode_num % model_saving_freq == 0):
             saver.save(sess, path + '/model-' + str(episode_num) + '.ckpt')
             print("Saved Model after episode : "+str(episode_num))
         if len(reward_per_episode_list) % 10 == 0:

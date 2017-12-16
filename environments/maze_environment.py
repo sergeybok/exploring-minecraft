@@ -44,10 +44,10 @@ class environment():
         # but instead walks in a diagonal shortest path to the goal. For value 2.0 there are no walking blocks except for the optimal path, i.e the floor is all empty but for the optimal path and the optimal path
         # is a straight line to the final goal and the agent follows this optimal path. The gap block doesn't necessarily have to be air, it can be defined as lapis_ore or anything else as well.
 
-        # self.video_width = 256
-        self.video_width = 84
-        # self.video_height = 256
-        self.video_height = 84
+        self.video_width = 512
+        # self.video_width = 84
+        self.video_height = 512
+        # self.video_height = 84
         self.want_depth_channel = 'false'
         if(self.want_depth_channel=='false'):
             self.video_channels = 3
@@ -130,6 +130,8 @@ class environment():
         print('\nMission has started')
         self.curr_episode_num += 1
 
+
+
     # TODO :: fix the reward definition at the end of maze i.e touching the redstone properly
     # TODO :: cannot get the pixel frames for the terminal state, try to fix it, although i don't think we can get any pixels for the terminal state
     # NOTE ::: Currently I am giving a small negative reward for sending commands, i.e for taking any action at all
@@ -164,7 +166,7 @@ class environment():
             <AgentSection mode="Survival">
                 <Name>LSD Curiosity</Name>
                 <AgentStart>
-                    <Placement x="-204" y="81" z="217"/>
+                    <Placement x="-204" y="81" z="217" yaw="-40" pitch="30"/>
                 </AgentStart>
                 <AgentHandlers>
                     <DiscreteMovementCommands/>
@@ -273,24 +275,24 @@ def testing_function():
     maze_env.get_maze()
     total_num_actions_taken = 0
     frames_buffer = []
-    for i in range(150):
-        a = np.random.choice(list(maze_env.action_dict.keys()))
-        action_result = maze_env.take_action(a)
-        if(action_result):
-            is_terminal = action_result[2]
-            if(not(is_terminal)):
-                s1 = action_result[0]
-                frames_buffer.append(s1)
-                r = action_result[1]
-                total_num_actions_taken +=1
-            else:
-                print('Terminal state reached.....')
-                s1 = action_result[0]
-                frames_buffer.append(s1)
-                r = action_result[1]
-            print(s1)
-            print(r)
-            print(is_terminal)
+    # for i in range(150):
+    #     a = np.random.choice(list(maze_env.action_dict.keys()))
+    #     action_result = maze_env.take_action(a)
+    #     if(action_result):
+    #         is_terminal = action_result[2]
+    #         if(not(is_terminal)):
+    #             s1 = action_result[0]
+    #             frames_buffer.append(s1)
+    #             r = action_result[1]
+    #             total_num_actions_taken +=1
+    #         else:
+    #             print('Terminal state reached.....')
+    #             s1 = action_result[0]
+    #             frames_buffer.append(s1)
+    #             r = action_result[1]
+    #         print(s1)
+    #         print(r)
+    #         print(is_terminal)
 
     print('Total num actions taken is '+str(total_num_actions_taken))
     print('Length of total frames is '+str(len(frames_buffer)))
