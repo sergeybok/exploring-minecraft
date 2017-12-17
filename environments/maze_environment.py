@@ -10,9 +10,15 @@ import errno
 
 class environment():
     def __init__(self):
+        self.ms_per_tick = 50
+        self.reward_optimal_path = 0
+        self.reward_subgoal = 10
+        self.reward_goal = 100
+        self.maze_size = 10
+
         self.maze4 = '''
             <MazeDecorator>
-                <SizeAndPosition length="10" width="10" yOrigin="5" zOrigin="5" height="15"/>
+                <SizeAndPosition length="'''+str(self.maze_size)+''''" width="'''+str(self.maze_size)+''''" yOrigin="5" zOrigin="5" height="15"/>
                 <GapProbability variance="0.4">0.4</GapProbability>
                 <Seed>123</Seed>
                 <MaterialSeed>124</MaterialSeed>
@@ -61,7 +67,7 @@ class environment():
         self.mazeblocks = [self.maze4]
 
         self.agent_host = MalmoPython.AgentHost()
-        self.agent_host.addOptionalIntArgument("speed,s", "Length of tick, in ms.", 50)
+        self.agent_host.addOptionalIntArgument("speed,s", "Length of tick, in ms.", self.ms_per_tick)
         try:
             self.agent_host.parse(sys.argv)
         except RuntimeError as e:
@@ -175,9 +181,9 @@ class environment():
                         <Height>''' + str(self.video_height) + '''</Height>
                     </VideoProducer>
                     <RewardForTouchingBlockType>
-                        <Block reward="100.0" type="redstone_block" behaviour="onceOnly"/>
-                        <Block reward="20.0" type="glowstone"/>
-                        <Block reward="10.0" type="stone" variant="smooth_diorite"/>
+                        <Block reward="'''+str(self.reward_goal)+'''" type="redstone_block" behaviour="onceOnly"/>
+                        <Block reward="'''+str(self.reward_subgoal)+''''" type="glowstone"/>
+                        <Block reward="'''+str(self.reward_optimal_path)+''''" type="stone" variant="smooth_diorite"/>
                     </RewardForTouchingBlockType>
                     <RewardForSendingCommand reward="-1"/>
                 </AgentHandlers>

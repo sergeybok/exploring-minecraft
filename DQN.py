@@ -201,16 +201,16 @@ if not os.path.exists(path_Frame_Predictor):
 
 with QNetwork_graph.as_default():
     curr_episode_total_reward_placeholder = tf.placeholder(tf.float32, name='curr_episode_total_reward')
-    curr_episode_reward_summary = tf.summary.scalar("curr_episode_total_reward", curr_episode_total_reward_placeholder)
+    curr_episode_reward_summary = tf.summary.scalar("Per episode reward", curr_episode_total_reward_placeholder)
     mean_reward_over_window_placeholder = tf.placeholder(tf.float32, name='mean_reward_over_window')
-    mean_reward_over_window_summary = tf.summary.scalar("mean_reward_over_window", mean_reward_over_window_placeholder)
-
-
-
+    mean_reward_over_window_summary = tf.summary.scalar("Mean episodic reward over window", mean_reward_over_window_placeholder)
 
 sess_QNetwork = tf.Session(graph=QNetwork_graph)
 
-writer_op_QNetwork = tf.summary.FileWriter('./tf_graphs', sess_QNetwork.graph)
+tf_graph_file_name = './tf_graphs/subgoal_{0}_goal_{1}_size_{2}'.format(maze_env.reward_subgoal, maze_env.reward_goal, maze_env.maze_size)
+if not os.path.exists(tf_graph_file_name):
+    os.makedirs(tf_graph_file_name)
+writer_op_QNetwork = tf.summary.FileWriter(tf_graph_file_name, sess_QNetwork.graph)
 sess_QNetwork.run(init_QNetwork_graph)
 if use_intrinsic_reward:
     sess_Frame_Predictor = tf.Session(graph=Frame_Predictor_graph)
