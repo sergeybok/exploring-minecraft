@@ -5,6 +5,8 @@ import random
 import matplotlib.pyplot as plt
 import os
 import pickle
+import time
+import datetime
 
 import Perception
 import Reward
@@ -90,7 +92,7 @@ class Qnetwork():
 # ### Experience Replay
 # This class allows us to store experiences and sample then randomly to train the network.
 class experience_buffer():
-    def __init__(self, buffer_size=1000):
+    def __init__(self, buffer_size=2000):
         self.buffer = []
         self.buffer_size = buffer_size
 
@@ -132,16 +134,18 @@ update_freq_per_episodes = 1  # How often to perform a training step.
 gamma_discount_factor = .9999  # Discount factor on the target Q-values
 startE = 0.5  # Starting chance of random action
 endE = 0.05  # Final chance of random action
-annealing_steps = 5000.  # How many steps of training to reduce startE to endE.
+annealing_steps = 7000.  # How many steps of training to reduce startE to endE.
 
-num_episodes = 5 # How many episodes of game environment to train network with.
+batch_size_deconv_compressor = 10
+intrinsic_reward_rescaling_factor = 2
+num_episodes = 1500 # How many episodes of game environment to train network with.
 
 pre_train_steps = 100  # How many steps of random actions before training begins.
 # max_epLength = 500  # The max allowed length of our episode.
 load_model = False  # Whether to load a saved model.
 path_QNetwork = "./curiosity_model/dqn_model"  # The path to save our model to.
 path_Frame_Predictor = "./curiosity_model/frame_predictor_model"  # The path to save our model to.
-model_saving_freq = 10
+model_saving_freq = 50
 # h_size = 512  # The size of the final convolutional layer before splitting it into Advantage and Value streams.
 tau = 0.001  # Rate to update target network toward primary network
 num_previous_frames = 4
@@ -167,13 +171,10 @@ with QNetwork_graph.as_default():
 
 if use_intrinsic_reward:
     with Frame_Predictor_graph.as_default():
-        curiosity = Reward.Compressor(frame_height=frame_height, frame_width=frame_width, frame_channels=frame_channels, 
+        curiosity = Reward.Compressor(frame_height=frame_height, frame_width=frame_width, frame_channels=frame_channels, state_feature_size=mainQN.state_feature_vector.shape[1].value,
                                     total_num_actions=total_num_actions, network_name='compressor')
         init_Frame_Predictor_graph = tf.global_variables_initializer()
         saver_Frame_Predictor = tf.train.Saver()
-
-
-
 
 with QNetwork_graph.as_default():
     init_QNetwork_graph = tf.global_variables_initializer()
@@ -225,6 +226,8 @@ if load_model == True:
     saver.restore(sess_QNetwork, ckpt_QNetwork.model_checkpoint_path)
     if use_intrinsic_reward:
         saver.restore(sess_Frame_Predictor, ckpt_Frame_Predictor.model_checkpoint_path)
+
+start_time = time.time()
 for episode_num in range(num_episodes):
     curr_episode_total_reward = 0
     maze_env.get_maze()
@@ -268,21 +271,6 @@ for episode_num in range(num_episodes):
             break
         total_steps += 1
 
-        if use_intrinsic_reward and not myBuffer.is_empty():
-            sample_, _ = myBuffer.sample(historical_sample_size)
-            state_feature_sample = np.vstack(sample_[:,5])
-            # action_sample = np.vstack(sample_[:,1]).astype(np.uint8)
-            action_sample = sample_[:,1]
-            state_tp1 = np.vstack(sample_[:,3])
-
-            pred_tm1 = curiosity.predict_next_state(sess_Frame_Predictor,
-                                            state_feature_sample,
-                                            action_sample)
-            l = curiosity.train(sess_Frame_Predictor,state_feature_sample, action_sample, state_tp1)
-            pred_t = curiosity.predict_next_state(sess_Frame_Predictor,state_feature_sample,action_sample)
-            intrinsic_r = curiosity.get_reward(predictions_t=pred_t,predictions_tm1=pred_tm1,targets=state_tp1)
-            r += intrinsic_r
-
         episodeBuffer.add(np.reshape(np.array([s, a, r, s1, is_terminal_flag,cnn_features_state_s]), [1, 6]))  # Save the experience to our episode buffer.
         # Since we have 6 elements in the experience : s, a, r, s1, is_terminal_flag, cnn_s, therefore we reshape it as [size, 6]
 
@@ -297,6 +285,33 @@ for episode_num in range(num_episodes):
 
         if is_terminal_flag == True:
             break
+
+    if use_intrinsic_reward and not myBuffer.is_empty():
+        number_batches = len(episodeBuffer.buffer)//batch_size_deconv_compressor
+        for i in range(number_batches):
+            curr_batch = episodeBuffer.buffer[i*batch_size_deconv_compressor:(i+1)*batch_size_deconv_compressor]
+            curr_batch = np.reshape(np.array(curr_batch), [len(curr_batch), 6])
+            curr_batch_state_features = np.vstack(curr_batch[:, 5])
+            curr_batch_actions = curr_batch[:, 1]
+            curr_batch_states_tp1 = np.vstack(curr_batch[:, 3])
+
+            sample_, _ = myBuffer.sample(historical_sample_size)
+            state_feature_sample = np.vstack(sample_[:,5])
+            # action_sample = np.vstack(sample_[:,1]).astype(np.uint8)
+            action_sample = sample_[:,1]
+            state_tp1 = np.vstack(sample_[:,3])
+
+            pred_tm1 = curiosity.predict_next_state(sess_Frame_Predictor, state_feature_sample, action_sample)
+
+            l = curiosity.train(sess_Frame_Predictor,curr_batch_state_features, curr_batch_actions, curr_batch_states_tp1)
+
+            pred_t = curiosity.predict_next_state(sess_Frame_Predictor,state_feature_sample,action_sample)
+            intrinsic_r = curiosity.get_reward(predictions_t=pred_t,predictions_tm1=pred_tm1,targets=state_tp1)
+            intrinsic_r = min(intrinsic_r * intrinsic_reward_rescaling_factor, 1)
+
+            curr_batch = episodeBuffer.buffer[i * batch_size_deconv_compressor:(i + 1) * batch_size_deconv_compressor]
+            for list_index in range(len(curr_batch)):
+                curr_batch[list_index][2] += intrinsic_r
 
     #TODO Figure out why is it not being trained for the episode 1
     if total_steps > pre_train_steps:
@@ -336,6 +351,11 @@ for episode_num in range(num_episodes):
     if len(reward_per_episode_list) % 10 == 0:
         print('Total steps taken till now, mean reward per episode, current epsilon :::::: ')
         print(str(total_steps)+', '+str(np.mean(reward_per_episode_list))+', '+str(e))
+
+end_episode_time = time.time()
+duration = end_episode_time-start_time
+duration = datetime.timedelta(seconds=duration)
+print('Total running time is {0}'.format(duration))
 saver_QNetwork.save(sess_QNetwork, path_QNetwork + '/model-' + str(episode_num) + '.ckpt')
 if use_intrinsic_reward:
     saver_Frame_Predictor.save(sess_Frame_Predictor, path_Frame_Predictor + '/model-' + str(episode_num) + '.ckpt')

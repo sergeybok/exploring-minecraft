@@ -8,7 +8,7 @@ import Perception
 
 class Compressor:
 
-	def __init__(self,frame_height=None, frame_width=None, frame_channels=None,state_feature_size=1600, total_num_actions=None, network_name=None):
+	def __init__(self,frame_height=None, frame_width=None, frame_channels=None,state_feature_size=None, total_num_actions=None, network_name=None):
 
 		self.state_feature = tf.placeholder(tf.float32,shape=[None,state_feature_size],name='Compressor_state_input')
 		self.action = tf.placeholder(tf.uint8,shape=[None],name='Compressor_action_input')

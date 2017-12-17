@@ -12,9 +12,10 @@ class environment():
     def __init__(self):
         self.ms_per_tick = 50
         self.reward_optimal_path = 0
-        self.reward_subgoal = 10
-        self.reward_goal = 100
+        self.reward_subgoal = 0
+        self.reward_goal = 10
         self.maze_size = 10
+        self.episode_time_limit = 8000
 
         self.maze4 = '''
             <MazeDecorator>
@@ -165,7 +166,7 @@ class environment():
                 <ServerHandlers>
                     <FlatWorldGenerator generatorString="3;7,220*1,5*3,2;3;,biome_1" />
                     ''' + mazeblock + '''
-                    <ServerQuitFromTimeUp timeLimitMs="8000"/>
+                    <ServerQuitFromTimeUp timeLimitMs=" ''' +str(self.episode_time_limit) + ''' "/>
                     <ServerQuitWhenAnyAgentFinishes />
                 </ServerHandlers>
             </ServerSection>
