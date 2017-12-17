@@ -133,7 +133,9 @@ gamma_discount_factor = .9999  # Discount factor on the target Q-values
 startE = 0.5  # Starting chance of random action
 endE = 0.05  # Final chance of random action
 annealing_steps = 5000.  # How many steps of training to reduce startE to endE.
-num_episodes = 10 # How many episodes of game environment to train network with.
+
+num_episodes = 5 # How many episodes of game environment to train network with.
+
 pre_train_steps = 100  # How many steps of random actions before training begins.
 # max_epLength = 500  # The max allowed length of our episode.
 load_model = False  # Whether to load a saved model.

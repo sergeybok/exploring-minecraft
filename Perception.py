@@ -4,7 +4,9 @@ from tensorflow.contrib import slim
 import numpy as np 
 
 
-conv3_shape = None
+conv3_shape_1 = None
+conv3_shape_2 = None
+conv3_shape_3 = None
 
 
 def CNN(input, height, width,in_channel, out_channel,network_name,afn=tf.nn.elu):
@@ -24,7 +26,13 @@ def CNN(input, height, width,in_channel, out_channel,network_name,afn=tf.nn.elu)
 						padding='VALID',scope=(network_name+"_CNN_3"))
 
 	#batch, in_height, in_width, in_channels
-	conv3_shape = conv3.shape
+	global conv3_shape_1 
+	global conv3_shape_2 
+	global conv3_shape_3 
+	conv3_shape_1 = conv3.shape[1].value
+	conv3_shape_2 = conv3.shape[2].value
+	conv3_shape_3 = conv3.shape[3].value
+
 
 	#conv4 = slim.conv2d(inputs=conv3,num_outputs=out_channel,activation_fn=tf.nn.sigmoid,
 	#					kernel_size=[7,7],stride=[1,1],
@@ -38,7 +46,8 @@ def CNN(input, height, width,in_channel, out_channel,network_name,afn=tf.nn.elu)
 
 def Deconv(input, height, width,network_name,in_channel=64,out_channel=3):
 
-	img = tf.reshape(input,shape=conv3_shape) # This depends on the cnn output before flatten
+	img = tf.reshape(input,shape=[-1,conv3_shape_1,conv3_shape_2,conv3_shape_3]) 
+	# This depends on the cnn output before flatten
 
 	scope = network_name + '_Deconv'
 

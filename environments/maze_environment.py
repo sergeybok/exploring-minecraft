@@ -18,7 +18,7 @@ class environment():
 
         self.maze4 = '''
             <MazeDecorator>
-                <SizeAndPosition length="'''+str(self.maze_size)+''''" width="'''+str(self.maze_size)+''''" yOrigin="5" zOrigin="5" height="15"/>
+                <SizeAndPosition length=" '''+str(self.maze_size)+''' " width="'''+str(self.maze_size)+''' " yOrigin="5" zOrigin="5" height="15"/>
                 <GapProbability variance="0.4">0.4</GapProbability>
                 <Seed>123</Seed>
                 <MaterialSeed>124</MaterialSeed>
@@ -150,6 +150,7 @@ class environment():
 
             <ModSettings>
                 <MsPerTick>''' + str(self.TICK_LENGTH) + '''</MsPerTick>
+                <PrioritiseOffscreenRendering>true</PrioritiseOffscreenRendering>
             </ModSettings>
 
             <ServerSection>
@@ -176,14 +177,14 @@ class environment():
                 </AgentStart>
                 <AgentHandlers>
                     <DiscreteMovementCommands/>
-                    <VideoProducer want_depth="'''+str(self.want_depth_channel)+'''">
+                    <VideoProducer want_depth=" '''+str(self.want_depth_channel)+''' ">
                         <Width>''' + str(self.video_width) + '''</Width>
                         <Height>''' + str(self.video_height) + '''</Height>
                     </VideoProducer>
                     <RewardForTouchingBlockType>
-                        <Block reward="'''+str(self.reward_goal)+'''" type="redstone_block" behaviour="onceOnly"/>
-                        <Block reward="'''+str(self.reward_subgoal)+''''" type="glowstone"/>
-                        <Block reward="'''+str(self.reward_optimal_path)+''''" type="stone" variant="smooth_diorite"/>
+                        <Block reward=" '''+str(self.reward_goal)+''' " type="redstone_block" behaviour="onceOnly"/>
+                        <Block reward=" '''+str(self.reward_subgoal)+''' " type="glowstone"/>
+                        <Block reward=" '''+str(self.reward_optimal_path)+''' " type="stone" variant="smooth_diorite"/>
                     </RewardForTouchingBlockType>
                     <RewardForSendingCommand reward="-1"/>
                 </AgentHandlers>
