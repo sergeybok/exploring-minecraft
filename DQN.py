@@ -15,7 +15,8 @@ import Reward
 import maze_environment
 
 
-use_intrinsic_reward = True
+use_intrinsic_reward = False
+use_complete_random_agent = True
 historical_sample_size = 100
 
 
@@ -130,18 +131,19 @@ def updateTarget(op_holder, sess):
 # ### Training the network
 # Setting all the training parameters
 batch_size = 100  # How many experiences to use for each training step.
-update_freq_per_episodes = 1  # How often to perform a training step.
 gamma_discount_factor = .9999  # Discount factor on the target Q-values
 startE = 0.5  # Starting chance of random action
 endE = 0.05  # Final chance of random action
 annealing_steps = 7000.  # How many steps of training to reduce startE to endE.
-
 batch_size_deconv_compressor = 10
 intrinsic_reward_rescaling_factor = 2
 num_episodes = 1500 # How many episodes of game environment to train network with.
-
+if(use_complete_random_agent):
+    update_freq_per_episodes = num_episodes # How often to perform a training step.
+else:
+    update_freq_per_episodes = 1  # How often to perform a training step.
 pre_train_steps = 100  # How many steps of random actions before training begins.
-# max_epLength = 500  # The max allowed length of our episode.
+max_actions_per_episode = 160  # The max allowed length of our episode.
 load_model = False  # Whether to load a saved model.
 path_QNetwork = "./curiosity_model/dqn_model"  # The path to save our model to.
 path_Frame_Predictor = "./curiosity_model/frame_predictor_model"  # The path to save our model to.
@@ -239,7 +241,7 @@ for episode_num in range(num_episodes):
     #NOTE ::: We can condition the below while loop on either a pre-defined number of maximum action or wait for the environment episode to get over when the agent runs out of the mission time.
     #NOTE ::: I have conditioned the while loop on the mission time.
     # while steps_taken_per_episode < max_epLength:  # If the agent takes longer than 50 moves to reach the end of the maze, end the trial.
-    while(maze_env.world_state.is_mission_running):
+    while(maze_env.world_state.is_mission_running and steps_taken_per_episode<max_actions_per_episode):
         steps_taken_per_episode += 1
         # Choose an action by greedily (with e chance of random action) from the Q-network
         # if(not use_intrinsic_reward and (np.random.rand(1) < e or total_steps < pre_train_steps)):
@@ -257,6 +259,8 @@ for episode_num in range(num_episodes):
         else:
             a, cnn_features_state_s = sess_QNetwork.run([mainQN.predict, mainQN.state_feature_vector], feed_dict={mainQN.flattened_image: [s]})
             a = a[0]
+        if(use_complete_random_agent):
+            a = np.random.randint(0, total_num_actions)
         action_result = maze_env.take_action(a)
         if(action_result):
             is_terminal_flag = action_result[2]
