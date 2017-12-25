@@ -157,9 +157,8 @@ previous_frames = []
 QNetwork_graph = tf.Graph()
 Frame_Predictor_graph = tf.Graph()
 
-#TODO why is reset default graph required??
-#tf.reset_default_graph()
-maze_env = maze_environment.environment()
+port_number = 10000
+maze_env = maze_environment.environment(port_number)
 frame_height = maze_env.video_height
 frame_width = maze_env.video_width
 frame_channels = maze_env.video_channels

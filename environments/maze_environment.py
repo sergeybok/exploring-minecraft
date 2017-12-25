@@ -9,13 +9,14 @@ import json
 import errno
 
 class environment():
-    def __init__(self):
+    def __init__(self, port_number):
         self.ms_per_tick = 50
         self.reward_optimal_path = 0
         self.reward_subgoal = 0
         self.reward_goal = 10
         self.maze_size = 10
         self.episode_time_limit = 8000
+        self.port_number = port_number
 
         self.maze4 = '''
             <MazeDecorator>
@@ -110,10 +111,14 @@ class environment():
         mazeblock = random.choice(self.mazeblocks)
         my_mission = MalmoPython.MissionSpec(self.GetMissionXML(mazeblock), self.validate)
 
+        client_pool = MalmoPython.ClientPool()
+        client_pool.add(MalmoPython.ClientInfo("127.0.0.1", self.port_number))
+        role = 0
+        unique_experiment_id = ""
         max_retries = 3
         for retry in range(max_retries):
             try:
-                self.agent_host.startMission(my_mission, my_mission_record)
+                self.agent_host.startMission(my_mission, client_pool, my_mission_record, role, unique_experiment_id)
                 break
             except RuntimeError as e:
                 if retry == max_retries - 1:
