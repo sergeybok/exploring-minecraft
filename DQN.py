@@ -7,6 +7,7 @@ import os
 import pickle
 import time
 import datetime
+import sys
 
 import Perception
 import Reward
@@ -16,7 +17,7 @@ import maze_environment
 
 
 use_intrinsic_reward = False
-use_complete_random_agent = True
+use_complete_random_agent = False
 historical_sample_size = 100
 
 
@@ -36,20 +37,22 @@ class Qnetwork():
         self.streamVC = self.state_feature_vector
         self.streamA = tf.contrib.layers.flatten(self.streamAC)
         self.streamV = tf.contrib.layers.flatten(self.streamVC)
-        xavier_init = tf.contrib.layers.xavier_initializer()
-        # print(tf.shape(self.streamA)[1])
-        self.AW1 = tf.Variable(xavier_init([self.streamA.shape[1].value, 512]))
-        self.ABias1 = tf.Variable(tf.constant(0.1, shape=[512]))
-        self.VW1 = tf.Variable(xavier_init([self.streamV.shape[1].value, 512]))
-        self.VBias1 = tf.Variable(tf.constant(0.1, shape=[512]))
+        xavier_init = tf.contrib.layers.xavier_initializer(seed=8739)
+        self.AW1 = tf.Variable(xavier_init([self.streamA.shape[1].value, 512]), name=network_name+'advantage_FC_W1')
+        self.ABias1 = tf.Variable(tf.constant(0.1, shape=[512]), name=network_name+'advantage_FC_B1')
+        xavier_init = tf.contrib.layers.xavier_initializer(seed=8635)
+        self.VW1 = tf.Variable(xavier_init([self.streamV.shape[1].value, 512]), name=network_name+'value_FC_W1')
+        self.VBias1 = tf.Variable(tf.constant(0.1, shape=[512]), name=network_name+'value_FC_B1')
         self.Advantage_FC1 = tf.matmul(self.streamA, self.AW1)+self.ABias1
         self.Advantage_FC1 = tf.nn.relu(self.Advantage_FC1)
         self.Value_FC1 = tf.matmul(self.streamV, self.VW1)+self.VBias1
         self.Value_FC1 = tf.nn.relu(self.Value_FC1)
-        self.AW2 = tf.Variable(xavier_init([self.Advantage_FC1.shape[1].value, total_num_actions]))
-        self.ABias2 = tf.Variable(tf.constant(0.1, shape=[total_num_actions]))
-        self.VW2 = tf.Variable(xavier_init([self.Value_FC1.shape[1].value, 1]))
-        self.VBias2 = tf.Variable(tf.constant(0.1, shape=[1]))
+        xavier_init = tf.contrib.layers.xavier_initializer(seed=8536)
+        self.AW2 = tf.Variable(xavier_init([self.Advantage_FC1.shape[1].value, total_num_actions]), name=network_name+'advantage_FC_W2')
+        self.ABias2 = tf.Variable(tf.constant(0.1, shape=[total_num_actions]), name=network_name+'advantage_FC_B2')
+        xavier_init = tf.contrib.layers.xavier_initializer(seed=8267)
+        self.VW2 = tf.Variable(xavier_init([self.Value_FC1.shape[1].value, 1]), name=network_name+'value_FC_W2')
+        self.VBias2 = tf.Variable(tf.constant(0.1, shape=[1]), name=network_name+'value_FC_B2')
         self.Advantage = tf.matmul(self.Advantage_FC1, self.AW2)+self.ABias2
         self.Value = tf.matmul(self.Value_FC1, self.VW2)+self.VBias2
 
@@ -69,7 +72,7 @@ class Qnetwork():
 
         self.td_error = tf.square(self.targetQ - self.Q)
         self.loss = tf.reduce_mean(self.td_error)
-        if(network_name=='main'):
+        if(network_name=='Q_main'):
             self.optimizer = tf.train.AdamOptimizer(learning_rate=0.0001)
             gvs = self.optimizer.compute_gradients(self.loss)
             capped_gvs = [(tf.clip_by_norm(grad, 10.0), var) for grad, var in gvs]
@@ -112,21 +115,14 @@ class experience_buffer():
         return len(self.buffer) == 0
 
 
-
-# These functions allow us to update the parameters of our target network with those of the primary network.
-# tfVars contains the variables of the primary network and of the target network in the respective order.
-# Therefore we update the values of the target network variables using the value of primary network variables and the target network variables itself.
-def updateTargetGraph(tfVars, tau):
-    total_vars = len(tfVars)
-    op_holder = []
-    for idx, var in enumerate(tfVars[0:total_vars // 2]):
-        op_holder.append(tfVars[idx + total_vars // 2].assign(
-            (var.value() * tau) + ((1 - tau) * tfVars[idx + total_vars // 2].value())))
-    return op_holder
-
-def updateTarget(op_holder, sess):
-    for op in op_holder:
-        sess.run(op)
+def target_network_update_op(Q_main_variables, Q_target_variables, tau):
+    target_network_update_ops = []
+    for main_network_var, target_network_var in zip(sorted(Q_main_variables, key=lambda v: v.name), sorted(Q_target_variables, key=lambda v: v.name)):
+        assign_value = (main_network_var.value()*tau) + ((1 - tau)*target_network_var.value())
+        update_op = target_network_var.assign(assign_value)
+        target_network_update_ops.append(update_op)
+    grouped_target_network_update_op = tf.group(*target_network_update_ops)
+    return grouped_target_network_update_op
 
 # ### Training the network
 # Setting all the training parameters
@@ -134,10 +130,10 @@ batch_size = 100  # How many experiences to use for each training step.
 gamma_discount_factor = .9999  # Discount factor on the target Q-values
 startE = 0.5  # Starting chance of random action
 endE = 0.05  # Final chance of random action
-annealing_steps = 7000.  # How many steps of training to reduce startE to endE.
+annealing_steps = 7000  # How many steps of training to reduce startE to endE.
 batch_size_deconv_compressor = 10
 intrinsic_reward_rescaling_factor = 2
-num_episodes = 1500 # How many episodes of game environment to train network with.
+num_episodes = 5  # How many episodes of game environment to train network with.
 if(use_complete_random_agent):
     update_freq_per_episodes = num_episodes # How often to perform a training step.
 else:
@@ -165,8 +161,10 @@ frame_channels = maze_env.video_channels
 #TODO define whether the actions are continous or discrete
 with QNetwork_graph.as_default():
     total_num_actions = maze_env.total_num_actions
-    mainQN = Qnetwork(frame_height=frame_height, frame_width=frame_width, frame_channels=frame_channels, total_num_actions=total_num_actions, network_name='main')
-    targetQN = Qnetwork(frame_height=frame_height, frame_width=frame_width, frame_channels=frame_channels, total_num_actions=total_num_actions, network_name='target')
+    with tf.variable_scope("Q_main") as Q_main_scope:
+        mainQN = Qnetwork(frame_height=frame_height, frame_width=frame_width, frame_channels=frame_channels, total_num_actions=total_num_actions, network_name='Q_main')
+    with tf.variable_scope("Q_target") as Q_target_scope:
+        targetQN = Qnetwork(frame_height=frame_height, frame_width=frame_width, frame_channels=frame_channels, total_num_actions=total_num_actions, network_name='Q_target')
     saver_QNetwork = tf.train.Saver()
 
 
@@ -179,15 +177,18 @@ if use_intrinsic_reward:
 
 with QNetwork_graph.as_default():
     init_QNetwork_graph = tf.global_variables_initializer()
-
+    #IMPORTANT NOTE::: When a scope is passed to the following tf.get_collection it returns only those trainable variables which are named.
+    # So it is important to name all the trainable variables.
+    Q_main_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=Q_main_scope.name)
+    Q_target_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=Q_target_scope.name)
     trainables = tf.trainable_variables()
-    targetOps = updateTargetGraph(trainables, tau)
+    grouped_target_network_update_op = target_network_update_op(Q_main_variables, Q_target_variables, tau)
 
 myBuffer = experience_buffer()
 
 # Set the rate of random action decrease.
 e = startE
-stepDrop = (startE - endE) / annealing_steps
+stepDrop = float(startE - endE)/annealing_steps
 
 # create lists to contain total rewards and steps per episode
 steps_taken_per_episode_list = []
@@ -197,7 +198,6 @@ mean_reward_per_episode_window_list = []
 total_steps = 0
 
 # Make a path for our model to be saved in.
-
 if not os.path.exists(path_QNetwork):
     os.makedirs(path_QNetwork)
 if not os.path.exists(path_Frame_Predictor):
@@ -211,7 +211,7 @@ with QNetwork_graph.as_default():
 
 sess_QNetwork = tf.Session(graph=QNetwork_graph)
 
-tf_graph_file_name = './tf_graphs/subgoal_{0}_goal_{1}_size_{2}'.format(maze_env.reward_subgoal, maze_env.reward_goal, maze_env.maze_size)
+tf_graph_file_name = './curiosity_model/tf_graphs/subgoal_{0}_goal_{1}_size_{2}'.format(maze_env.reward_subgoal, maze_env.reward_goal, maze_env.maze_size)
 if not os.path.exists(tf_graph_file_name):
     os.makedirs(tf_graph_file_name)
 writer_op_QNetwork = tf.summary.FileWriter(tf_graph_file_name, sess_QNetwork.graph)
@@ -242,16 +242,10 @@ for episode_num in range(num_episodes):
     # while steps_taken_per_episode < max_epLength:  # If the agent takes longer than 50 moves to reach the end of the maze, end the trial.
     while(maze_env.world_state.is_mission_running and steps_taken_per_episode<max_actions_per_episode):
         steps_taken_per_episode += 1
-        # Choose an action by greedily (with e chance of random action) from the Q-network
-        # if(not use_intrinsic_reward and (np.random.rand(1) < e or total_steps < pre_train_steps)):
-        #     a = np.random.randint(0, total_num_actions)
-        #     cnn_features_state_s = None
-        # else:
-        #     a, cnn_features_state_s = sess_QNetwork.run([mainQN.predict,self.state_feature_vector], feed_dict={mainQN.flattened_image: [s]})[0]
         if(not use_intrinsic_reward):
             cnn_features_state_s = None
             if(np.random.rand(1) < e or total_steps < pre_train_steps):
-
+                # Choose an action by greedily (with e chance of random action) from the Q-network
                 a = np.random.randint(0, total_num_actions)
             else:
                 a = sess_QNetwork.run(mainQN.predict, feed_dict={mainQN.flattened_image: [s]})[0]
@@ -333,7 +327,7 @@ for episode_num in range(num_episodes):
                 # NOTE ::: it is important to recalculate the Q values of the states in the experience replay and then get the gradient w.r.t difference b/w recalculated values and targets
                 # NOTE ::: otherwise it defeats the purpose of experience replay, also we are not storing the Q values for this reason
                 _ = sess_QNetwork.run(mainQN.train_op, feed_dict={mainQN.flattened_image: np.vstack(trainBatch[:, 0]), mainQN.targetQ: targetQ, mainQN.actions: trainBatch[:, 1]})
-                updateTarget(targetOps, sess_QNetwork)  # Update the target network toward the primary network.
+                _ = sess_QNetwork.run(grouped_target_network_update_op)
 
     print('Episode : '+str(episode_num)+' Total reward : '+str(curr_episode_total_reward)+' Total steps : '+str(steps_taken_per_episode))
     myBuffer.add(episodeBuffer.buffer)
@@ -373,7 +367,7 @@ reward_per_episode_list = np.array(reward_per_episode_list)
 rMean = np.average(reward_per_episode_list)
 print('Mean reward is '+str(rMean))
 
-results_file_name = 'DQN_results.pickle'
+results_file_name = './curiosity_model/DQN_results.pickle'
 fp = open(results_file_name, 'w')
 results_dict = {'reward_per_episode_list':reward_per_episode_list, 'mean_reward_per_episode_window_list':mean_reward_per_episode_window_list, 'steps_taken_per_episode_list':steps_taken_per_episode_list}
 pickle.dump(results_dict, fp)

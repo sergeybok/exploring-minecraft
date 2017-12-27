@@ -14,6 +14,7 @@ class environment():
         self.reward_optimal_path = 0
         self.reward_subgoal = 0
         self.reward_goal = 10
+        self.every_action_penalty = -0.1
         self.maze_size = 10
         self.episode_time_limit = 8000
         self.port_number = port_number
@@ -86,7 +87,7 @@ class environment():
         self.agent_host.setRewardsPolicy(MalmoPython.RewardsPolicy.KEEP_ALL_REWARDS)
         self.agent_host.setVideoPolicy(MalmoPython.VideoPolicy.LATEST_FRAME_ONLY)
 
-        self.recordingsDirectory = "MazeRecordings"
+        self.recordingsDirectory = "./curiosity_model/MazeRecordings"
         self.TICK_LENGTH = self.agent_host.getIntArgument("speed")
 
         try:
@@ -192,7 +193,7 @@ class environment():
                         <Block reward=" '''+str(self.reward_subgoal)+''' " type="glowstone"/>
                         <Block reward=" '''+str(self.reward_optimal_path)+''' " type="stone" variant="smooth_diorite"/>
                     </RewardForTouchingBlockType>
-                    <RewardForSendingCommand reward="-1"/>
+                    <RewardForSendingCommand reward=" '''+str(self.every_action_penalty)+''' "/>
                 </AgentHandlers>
             </AgentSection>
 
