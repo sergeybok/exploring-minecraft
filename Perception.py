@@ -8,23 +8,23 @@ conv3_shape_1 = None
 conv3_shape_2 = None
 conv3_shape_3 = None
 
-def CNN(input, height, width,in_channel, out_channel,network_name,afn=tf.nn.elu):
+def CNN(input, height, width,in_channel, out_channel,afn=tf.nn.elu):
 
 	img = tf.reshape(input, shape=[-1, height, width, in_channel])
 
 	conv1 = slim.conv2d(inputs=img,num_outputs=32,activation_fn=afn,
 						kernel_size=[8,8],stride=[4,4],
-						padding='VALID',scope=(network_name+"_CNN_1"),
+						padding='VALID',scope=("CNN_1"),
 						weights_initializer=xavier_initializer(seed=1354))
 
 	conv2 = slim.conv2d(inputs=conv1,num_outputs=64,activation_fn=afn,
 						kernel_size=[4,4],stride=[2,2],
-						padding='VALID',scope=(network_name+"_CNN_2"),
+						padding='VALID',scope=("CNN_2"),
 						weights_initializer=xavier_initializer(seed=2345))
 
 	conv3 = slim.conv2d(inputs=conv2,num_outputs=out_channel,activation_fn=afn,
 						kernel_size=[5,5],stride=[1,1],
-						padding='VALID',scope=(network_name+"_CNN_3"),
+						padding='VALID',scope=("CNN_3"),
 						weights_initializer=xavier_initializer(seed=4321))
 
 	#batch, in_height, in_width, in_channels
@@ -38,7 +38,7 @@ def CNN(input, height, width,in_channel, out_channel,network_name,afn=tf.nn.elu)
 
 	#conv4 = slim.conv2d(inputs=conv3,num_outputs=out_channel,activation_fn=tf.nn.sigmoid,
 	#					kernel_size=[7,7],stride=[1,1],
-	#					padding='VALID',scope=(network_name+"_CNN_4"))
+	#					padding='VALID',scope=("CNN_4"))
 
 	return tf.contrib.layers.flatten(conv3)
 	#return conv3

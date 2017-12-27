@@ -22,45 +22,45 @@ historical_sample_size = 100
 
 
 class Qnetwork():
-    def __init__(self, frame_height=None, frame_width=None, frame_channels=None, total_num_actions=None, network_name=None):
+    def __init__(self, frame_height=None, frame_width=None, frame_channels=None, total_num_actions=None):
         flattened_frame_size = frame_height*frame_width*frame_channels
         self.flattened_image = tf.placeholder(shape=[None, flattened_frame_size], dtype=tf.float32)
         #[batch, in_height, in_width, in_channels]
         #[filter_height, filter_width, in_channels, out_channels]
         # Must have strides[0] = strides[3] = 1. For the most common case of the same horizontal and vertices strides, strides = [1, stride, stride, 1].
 
-        self.state_feature_vector = Perception.CNN(input=self.flattened_image,height=frame_height,width=frame_width,
-                                            in_channel=3,out_channel=64,network_name=network_name)
+        self.state_feature_vector = Perception.CNN(input=self.flattened_image,height=frame_height,width=frame_width,in_channel=frame_channels,out_channel=64)
 
         #NOTE :::: Split is not really required, also even if you use split, it should be done on the dimension of feature maps. Also the weight matrices have to be correctly shaped.
-        self.streamAC = self.state_feature_vector
-        self.streamVC = self.state_feature_vector
-        self.streamA = tf.contrib.layers.flatten(self.streamAC)
-        self.streamV = tf.contrib.layers.flatten(self.streamVC)
-        xavier_init = tf.contrib.layers.xavier_initializer(seed=8739)
-        self.AW1 = tf.Variable(xavier_init([self.streamA.shape[1].value, 512]), name=network_name+'advantage_FC_W1')
-        self.ABias1 = tf.Variable(tf.constant(0.1, shape=[512]), name=network_name+'advantage_FC_B1')
-        xavier_init = tf.contrib.layers.xavier_initializer(seed=8635)
-        self.VW1 = tf.Variable(xavier_init([self.streamV.shape[1].value, 512]), name=network_name+'value_FC_W1')
-        self.VBias1 = tf.Variable(tf.constant(0.1, shape=[512]), name=network_name+'value_FC_B1')
-        self.Advantage_FC1 = tf.matmul(self.streamA, self.AW1)+self.ABias1
-        self.Advantage_FC1 = tf.nn.relu(self.Advantage_FC1)
-        self.Value_FC1 = tf.matmul(self.streamV, self.VW1)+self.VBias1
-        self.Value_FC1 = tf.nn.relu(self.Value_FC1)
-        xavier_init = tf.contrib.layers.xavier_initializer(seed=8536)
-        self.AW2 = tf.Variable(xavier_init([self.Advantage_FC1.shape[1].value, total_num_actions]), name=network_name+'advantage_FC_W2')
-        self.ABias2 = tf.Variable(tf.constant(0.1, shape=[total_num_actions]), name=network_name+'advantage_FC_B2')
-        xavier_init = tf.contrib.layers.xavier_initializer(seed=8267)
-        self.VW2 = tf.Variable(xavier_init([self.Value_FC1.shape[1].value, 1]), name=network_name+'value_FC_W2')
-        self.VBias2 = tf.Variable(tf.constant(0.1, shape=[1]), name=network_name+'value_FC_B2')
-        self.Advantage = tf.matmul(self.Advantage_FC1, self.AW2)+self.ABias2
-        self.Value = tf.matmul(self.Value_FC1, self.VW2)+self.VBias2
+        with tf.variable_scope("advantage_stream"):
+            self.streamAC = self.state_feature_vector
+            self.streamA = tf.contrib.layers.flatten(self.streamAC)
+            xavier_init = tf.contrib.layers.xavier_initializer(seed=8739)
+            self.AW1 = tf.Variable(xavier_init([self.streamA.shape[1].value, 512]), name='FC_1_Weights')
+            self.ABias1 = tf.Variable(tf.constant(0.1, shape=[512]), name='FC_1_Bias')
+            self.Advantage_FC1 = tf.matmul(self.streamA, self.AW1) + self.ABias1
+            self.Advantage_FC1 = tf.nn.relu(self.Advantage_FC1)
+            xavier_init = tf.contrib.layers.xavier_initializer(seed=8536)
+            self.AW2 = tf.Variable(xavier_init([self.Advantage_FC1.shape[1].value, total_num_actions]), name='FC_2_Weights')
+            self.ABias2 = tf.Variable(tf.constant(0.1, shape=[total_num_actions]), name='FC_2_Bias')
+            self.Advantage = tf.matmul(self.Advantage_FC1, self.AW2) + self.ABias2
+
+        with tf.variable_scope("value_stream"):
+            self.streamVC = self.state_feature_vector
+            self.streamV = tf.contrib.layers.flatten(self.streamVC)
+            xavier_init = tf.contrib.layers.xavier_initializer(seed=8635)
+            self.VW1 = tf.Variable(xavier_init([self.streamV.shape[1].value, 512]), name='FC_1_Weights')
+            self.VBias1 = tf.Variable(tf.constant(0.1, shape=[512]), name='FC_1_Bias')
+            self.Value_FC1 = tf.matmul(self.streamV, self.VW1) + self.VBias1
+            self.Value_FC1 = tf.nn.relu(self.Value_FC1)
+            xavier_init = tf.contrib.layers.xavier_initializer(seed=8267)
+            self.VW2 = tf.Variable(xavier_init([self.Value_FC1.shape[1].value, 1]), name='FC_2_Weights')
+            self.VBias2 = tf.Variable(tf.constant(0.1, shape=[1]), name='FC_2_Bias')
+            self.Value = tf.matmul(self.Value_FC1, self.VW2) + self.VBias2
 
         # NOTE ::: Add the state value and advantage value to get the q values but note that we subtract the average advantage value from advantage value of all actions.
         self.Qout = self.Value + tf.subtract(self.Advantage, tf.reduce_mean(self.Advantage, axis=1, keep_dims=True))
-        # We predict the action using argmax of advantages and not on Q values, anyway the argmax will be the same from both advantage and q values
-        # But taking the argmax from the advantage values saves us the computation of V values
-        # self.predict = tf.argmax(self.Qout, 1)
+        # NOTE :: we take argmax over advantage values instead of Q values
         self.predict = tf.argmax(self.Advantage, 1)
 
         # Below we obtain the loss by taking the sum of squares difference between the target and prediction Q values.
@@ -72,10 +72,12 @@ class Qnetwork():
 
         self.td_error = tf.square(self.targetQ - self.Q)
         self.loss = tf.reduce_mean(self.td_error)
-        if(network_name=='Q_main'):
+        network_scope_name = tf.get_variable_scope().name
+        if(network_scope_name=='Q_main'):
             self.optimizer = tf.train.AdamOptimizer(learning_rate=0.0001)
             gvs = self.optimizer.compute_gradients(self.loss)
-            capped_gvs = [(tf.clip_by_norm(grad, 10.0), var) for grad, var in gvs]
+            with tf.variable_scope("gradient_clipping"):
+                capped_gvs = [(tf.clip_by_norm(grad, 10.0), var) for grad, var in gvs]
             self.train_op = self.optimizer.apply_gradients(capped_gvs)
             # self.train_op = self.optimizer.minimize(self.loss)
 
@@ -117,11 +119,12 @@ class experience_buffer():
 
 def target_network_update_op(Q_main_variables, Q_target_variables, tau):
     target_network_update_ops = []
-    for main_network_var, target_network_var in zip(sorted(Q_main_variables, key=lambda v: v.name), sorted(Q_target_variables, key=lambda v: v.name)):
-        assign_value = (main_network_var.value()*tau) + ((1 - tau)*target_network_var.value())
-        update_op = target_network_var.assign(assign_value)
-        target_network_update_ops.append(update_op)
-    grouped_target_network_update_op = tf.group(*target_network_update_ops)
+    with tf.variable_scope("target_network_update_ops"):
+        for main_network_var, target_network_var in zip(sorted(Q_main_variables, key=lambda v: v.name), sorted(Q_target_variables, key=lambda v: v.name)):
+            assign_value = (main_network_var.value()*tau) + ((1 - tau)*target_network_var.value())
+            update_op = target_network_var.assign(assign_value)
+            target_network_update_ops.append(update_op)
+        grouped_target_network_update_op = tf.group(*target_network_update_ops)
     return grouped_target_network_update_op
 
 # ### Training the network
@@ -162,10 +165,16 @@ frame_channels = maze_env.video_channels
 with QNetwork_graph.as_default():
     total_num_actions = maze_env.total_num_actions
     with tf.variable_scope("Q_main") as Q_main_scope:
-        mainQN = Qnetwork(frame_height=frame_height, frame_width=frame_width, frame_channels=frame_channels, total_num_actions=total_num_actions, network_name='Q_main')
+        mainQN = Qnetwork(frame_height=frame_height, frame_width=frame_width, frame_channels=frame_channels, total_num_actions=total_num_actions)
     with tf.variable_scope("Q_target") as Q_target_scope:
-        targetQN = Qnetwork(frame_height=frame_height, frame_width=frame_width, frame_channels=frame_channels, total_num_actions=total_num_actions, network_name='Q_target')
+        targetQN = Qnetwork(frame_height=frame_height, frame_width=frame_width, frame_channels=frame_channels, total_num_actions=total_num_actions)
     saver_QNetwork = tf.train.Saver()
+    init_QNetwork_graph = tf.global_variables_initializer()
+    #IMPORTANT NOTE::: When a scope is passed to the following tf.get_collection it returns only those trainable variables which are named.
+    # So it is important to name all the trainable variables.
+    Q_main_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=Q_main_scope.name)
+    Q_target_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=Q_target_scope.name)
+    grouped_target_network_update_op = target_network_update_op(Q_main_variables, Q_target_variables, tau)
 
 
 if use_intrinsic_reward:
@@ -174,15 +183,6 @@ if use_intrinsic_reward:
                                     total_num_actions=total_num_actions, network_name='compressor')
         init_Frame_Predictor_graph = tf.global_variables_initializer()
         saver_Frame_Predictor = tf.train.Saver()
-
-with QNetwork_graph.as_default():
-    init_QNetwork_graph = tf.global_variables_initializer()
-    #IMPORTANT NOTE::: When a scope is passed to the following tf.get_collection it returns only those trainable variables which are named.
-    # So it is important to name all the trainable variables.
-    Q_main_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=Q_main_scope.name)
-    Q_target_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=Q_target_scope.name)
-    trainables = tf.trainable_variables()
-    grouped_target_network_update_op = target_network_update_op(Q_main_variables, Q_target_variables, tau)
 
 myBuffer = experience_buffer()
 
