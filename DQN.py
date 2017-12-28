@@ -32,7 +32,7 @@ endE = 0.05  # Final chance of random action
 annealing_steps = 7000  # How many steps of training to reduce startE to endE.
 batch_size_deconv_compressor = 10
 intrinsic_reward_rescaling_factor = 100
-num_episodes = 200  # How many episodes of game environment to train network with.
+num_episodes = 20  # How many episodes of game environment to train network with.
 if(use_complete_random_agent):
     update_freq_per_episodes = num_episodes # How often to perform a training step.
 else:
@@ -40,15 +40,15 @@ else:
 pre_train_steps = 100  # How many steps of random actions before training begins.
 max_actions_per_episode = 160  # The max allowed length of our episode.
 load_model = False  # Whether to load a saved model.
-path_QNetwork = "./curiosity_model/dqn_model"  # The path to save our model to.
-path_Frame_Predictor = "./curiosity_model/frame_predictor_model"  # The path to save our model to.
+path_Complete_Network = "./curiosity_model/complete_model"  # The path to save our model to.
+# path_Frame_Predictor = "./curiosity_model/frame_predictor_model"  # The path to save our model to.
 model_saving_freq = 50
 # h_size = 512  # The size of the final convolutional layer before splitting it into Advantage and Value streams.
 tau = 0.001  # Rate to update target network toward primary network
 num_previous_frames = 4
 previous_frames = []
 
-
+state_frame_normalization_factor = 255.0
 
 
 
@@ -107,14 +107,14 @@ class Qnetwork():
         if(network_scope_name=='Q_main'):
             Q_vars = self.advantage_w + self.value_w
             self.optimizer = tf.train.AdamOptimizer(learning_rate=0.0001)
-            gvs = self.optimizer.compute_gradients(self.loss,var_list=Q_vars)
-            with tf.variable_scope("gradient_clipping"):
-                capped_gvs = [(tf.clip_by_norm(grad, 10.0), var) for grad, var in gvs]
-            self.train_Q_op = self.optimizer.apply_gradients(capped_gvs)
+            gvs_Q = self.optimizer.compute_gradients(self.loss,var_list=Q_vars)
+            with tf.variable_scope("gradient_clipping_Q_vars"):
+                capped_gvs_Q = [(tf.clip_by_norm(grad, 10.0), var) for grad, var in gvs_Q]
+            self.train_Q_op = self.optimizer.apply_gradients(capped_gvs_Q)
             gvs_cnn = self.optimizer.compute_gradients(self.loss,var_list=self.CNN_params)
-            with tf.variable_scope("gradient_clipping_cnn"):
-                capped_gvs = [(tf.clip_by_norm(grad, 10.0), var) for grad, var in gvs_cnn]
-            self.train_cnn_op = self.optimizer.apply_gradients(capped_gvs)
+            with tf.variable_scope("gradient_clipping_cnn_vars"):
+                capped_gvs_cnn = [(tf.clip_by_norm(grad, 10.0), var) for grad, var in gvs_cnn]
+            self.train_cnn_op = self.optimizer.apply_gradients(capped_gvs_cnn)
             # self.train_op = self.optimizer.minimize(self.loss)
 
 
@@ -178,7 +178,7 @@ with tf.variable_scope("Q_target") as Q_target_scope:
     targetQN = Qnetwork(frame_height=frame_height, frame_width=frame_width, frame_channels=frame_channels, total_num_actions=total_num_actions)
    
 
-saver_QNetwork = tf.train.Saver()
+saver = tf.train.Saver()
 
 #IMPORTANT NOTE::: When a scope is passed to the following tf.get_collection it returns only those trainable variables which are named.
 # So it is important to name all the trainable variables.
@@ -207,39 +207,46 @@ mean_reward_per_episode_window_list = []
 total_steps = 0
 
 # Make a path for our model to be saved in.
-if not os.path.exists(path_QNetwork):
-    os.makedirs(path_QNetwork)
+if not os.path.exists(path_Complete_Network):
+    os.makedirs(path_Complete_Network)
+
+with tf.variable_scope("reward_scalars") as reward_scalars:
+    curr_episode_total_reward_placeholder = tf.placeholder(tf.float32, name='curr_episode_total_reward')
+    curr_episode_reward_summary = tf.summary.scalar("Per episode reward", curr_episode_total_reward_placeholder)
+    mean_reward_over_window_placeholder = tf.placeholder(tf.float32, name='mean_reward_over_window')
+    mean_reward_over_window_summary = tf.summary.scalar("Mean episodic reward over window", mean_reward_over_window_placeholder)
+    avg_batch_intrinsic_reward_placeholder = tf.placeholder(tf.float32, name='avg_batch_intrinsic_reward')
+    avg_batch_intrinsic_reward_summary = tf.summary.scalar("Avg batch intrinsic reward", avg_batch_intrinsic_reward_placeholder)
 
 
-curr_episode_total_reward_placeholder = tf.placeholder(tf.float32, name='curr_episode_total_reward')
-curr_episode_reward_summary = tf.summary.scalar("Per episode reward", curr_episode_total_reward_placeholder)
-mean_reward_over_window_placeholder = tf.placeholder(tf.float32, name='mean_reward_over_window')
-mean_reward_over_window_summary = tf.summary.scalar("Mean episodic reward over window", mean_reward_over_window_placeholder)
+with tf.variable_scope("loss_scalars") as loss_scalars:
+    avg_batch_compressor_loss_placeholder = tf.placeholder(tf.float32, name='avg_batch_compressor_loss')
+    avg_batch_compressor_loss_summary = tf.summary.scalar("Avg batch compressor loss", avg_batch_compressor_loss_placeholder)
+    avg_batch_DQN_loss_placeholder = tf.placeholder(tf.float32, name='avg_batch_DQN_loss')
+    avg_batch_DQN_loss_summary = tf.summary.scalar("Avg batch DQN loss", avg_batch_DQN_loss_placeholder)
 
-
-init_QNetwork_graph = tf.global_variables_initializer()
-sess_QNetwork = tf.Session()
-
+init_all_variables = tf.global_variables_initializer()
+sess = tf.Session()
 
 tf_graph_file_name = './curiosity_model/tf_graphs/subgoal_{0}_goal_{1}_size_{2}'.format(maze_env.reward_subgoal, maze_env.reward_goal, maze_env.maze_size)
 if not os.path.exists(tf_graph_file_name):
     os.makedirs(tf_graph_file_name)
-writer_op_QNetwork = tf.summary.FileWriter(tf_graph_file_name, sess_QNetwork.graph)
-sess_QNetwork.run(init_QNetwork_graph)
+writer_op_complete_Network = tf.summary.FileWriter(tf_graph_file_name, sess.graph)
+sess.run(init_all_variables)
 
 curr_episode_total_reward_summary = tf.Summary()
 if load_model == True:
     print('Loading Model...')
-    ckpt_QNetwork = tf.train.get_checkpoint_state(path_QNetwork)
-    saver.restore(sess_QNetwork, ckpt_QNetwork.model_checkpoint_path)
-    
+    ckpt_complete_Network = tf.train.get_checkpoint_state(path_Complete_Network)
+    saver.restore(sess, ckpt_complete_Network.model_checkpoint_path)
+
 
 start_time = time.time()
 for episode_num in range(num_episodes):
     curr_episode_total_reward = 0
     maze_env.get_maze()
     episodeBuffer = experience_buffer()
-    s = maze_env.get_current_state()/255.0
+    s = maze_env.get_current_state()/state_frame_normalization_factor
     is_terminal_flag = False
     steps_taken_per_episode = 0
     # The Q-Network
@@ -254,9 +261,9 @@ for episode_num in range(num_episodes):
                 # Choose an action by greedily (with e chance of random action) from the Q-network
                 a = np.random.randint(0, total_num_actions)
             else:
-                a = sess_QNetwork.run(mainQN.predict, feed_dict={mainQN.flattened_image: [s]})[0]
+                a = sess.run(mainQN.predict, feed_dict={mainQN.flattened_image: [s]})[0]
         else:
-            a, cnn_features_state_s = sess_QNetwork.run([mainQN.predict, mainQN.state_feature_vector], feed_dict={mainQN.flattened_image: [s]})
+            a, cnn_features_state_s = sess.run([mainQN.predict, mainQN.state_feature_vector], feed_dict={mainQN.flattened_image: [s]})
             a = a[0]
         if(use_complete_random_agent):
             a = np.random.randint(0, total_num_actions)
@@ -264,7 +271,7 @@ for episode_num in range(num_episodes):
         if(action_result):
             is_terminal_flag = action_result[2]
             if(not(is_terminal_flag)):
-                s1 = action_result[0] / 255.0
+                s1 = action_result[0]/state_frame_normalization_factor
                 # TODO save cnn_features_state_s1, that is the convolved output of next frame used for predictor loss
                 r = action_result[1]
             else:
@@ -291,7 +298,8 @@ for episode_num in range(num_episodes):
 
     if use_intrinsic_reward and not myBuffer.is_empty():
         Compressor_n_batches = len(episodeBuffer.buffer)//batch_size_deconv_compressor
-        avg_l = 0
+        avg_batch_compressor_loss = 0.0
+        avg_batch_intrinsic_reward = 0.0
         for i in range(Compressor_n_batches):
             curr_batch = episodeBuffer.buffer[i*batch_size_deconv_compressor:(i+1)*batch_size_deconv_compressor]
             curr_batch = np.reshape(np.array(curr_batch), [len(curr_batch), 5])
@@ -305,11 +313,11 @@ for episode_num in range(num_episodes):
             action_sample = sample_[:,1]
             state_tp1 = np.vstack(sample_[:,3])
 
-            pred_tm1 = curiosity.predict_next_state(sess_QNetwork, state_feature_sample, action_sample)
+            pred_tm1 = curiosity.predict_next_state(sess, state_feature_sample, action_sample)
 
-            l = curiosity.train(sess_QNetwork,curr_batch_state_features, curr_batch_actions, curr_batch_states_tp1)
+            l = curiosity.train(sess,curr_batch_state_features, curr_batch_actions, curr_batch_states_tp1)
 
-            pred_t = curiosity.predict_next_state(sess_QNetwork,state_feature_sample,action_sample)
+            pred_t = curiosity.predict_next_state(sess,state_feature_sample,action_sample)
             intrinsic_r = curiosity.get_reward(predictions_t=pred_t,predictions_tm1=pred_tm1,targets=state_tp1)
             intrinsic_r = intrinsic_r * intrinsic_reward_rescaling_factor
 
@@ -317,21 +325,24 @@ for episode_num in range(num_episodes):
             for list_index in range(len(curr_batch)):
                 curr_batch[list_index][2] += intrinsic_r
             #print('intrinsic Reward {0}'.format(intrinsic_r))
-
-            avg_l += l/Compressor_n_batches
-        print('compressor loss {0}'.format(avg_l))
-
+            avg_batch_compressor_loss += float(l)/Compressor_n_batches
+            avg_batch_intrinsic_reward += float(intrinsic_r)/Compressor_n_batches
+        print('compressor loss {0}'.format(avg_batch_compressor_loss))
+        summary_val_compressor_loss, = sess.run([avg_batch_compressor_loss_summary], feed_dict={avg_batch_compressor_loss_placeholder: avg_batch_compressor_loss})
+        writer_op_complete_Network.add_summary(summary_val_compressor_loss, episode_num + 1)
+        summary_val_intrinsic_reward, = sess.run([avg_batch_intrinsic_reward_summary], feed_dict={avg_batch_intrinsic_reward_placeholder: avg_batch_intrinsic_reward})
+        writer_op_complete_Network.add_summary(summary_val_intrinsic_reward, episode_num + 1)
 
     #TODO Figure out why is it not being trained for the episode 1
     if total_steps > pre_train_steps:
         if (episode_num % (update_freq_per_episodes) == 0 and episode_num > 0):
-            avg_l = 0
+            avg_batch_DQN_loss = 0.0
             Q_n_batches = 10
             for batch_num in range(Q_n_batches):
                 trainBatch, actual_sampled_size = myBuffer.sample(batch_size)  # Get a random batch of experiences.
                 # Below we perform the Double-DQN update to the target Q-values
-                Q1 = sess_QNetwork.run(mainQN.predict, feed_dict={mainQN.flattened_image: np.vstack(trainBatch[:, 3])})
-                Q2 = sess_QNetwork.run(targetQN.Qout, feed_dict={targetQN.flattened_image: np.vstack(trainBatch[:, 3])})
+                Q1 = sess.run(mainQN.predict, feed_dict={mainQN.flattened_image: np.vstack(trainBatch[:, 3])})
+                Q2 = sess.run(targetQN.Qout, feed_dict={targetQN.flattened_image: np.vstack(trainBatch[:, 3])})
                 # NOTE ::: the use of end_multiplier --- the is_terminal_flag gets stored as 1 or 0(True or False),
                 # NOTE ::: Done if the is_terminal_flag is true i.e 1, we define the end_multiplier as 0, if the is_terminal_flag is false i.e 0, we define the end_multiplier as 1
                 end_multiplier = -(trainBatch[:, 4] - 1)
@@ -340,27 +351,31 @@ for episode_num in range(num_episodes):
                 # Update the network with our target values.
                 # NOTE ::: it is important to recalculate the Q values of the states in the experience replay and then get the gradient w.r.t difference b/w recalculated values and targets
                 # NOTE ::: otherwise it defeats the purpose of experience replay, also we are not storing the Q values for this reason
-                _,_,l = sess_QNetwork.run([mainQN.train_Q_op,mainQN.train_cnn_op,mainQN.loss], feed_dict={mainQN.flattened_image: np.vstack(trainBatch[:, 0]), mainQN.targetQ: targetQ, mainQN.actions: trainBatch[:, 1]})
-                _ = sess_QNetwork.run(grouped_target_network_update_op)
-                avg_l += l/Q_n_batches
-            print('Qloss {0}'.format(avg_l))
+                _,_,l = sess.run([mainQN.train_Q_op,mainQN.train_cnn_op,mainQN.loss], feed_dict={mainQN.flattened_image: np.vstack(trainBatch[:, 0]), mainQN.targetQ: targetQ, mainQN.actions: trainBatch[:, 1]})
+                _ = sess.run(grouped_target_network_update_op)
+                avg_batch_DQN_loss += float(l)/Q_n_batches
+            print('Qloss {0}'.format(avg_batch_DQN_loss))
+            summary_val_DQN_loss, = sess.run([avg_batch_DQN_loss_summary], feed_dict={avg_batch_DQN_loss_placeholder: avg_batch_DQN_loss})
+            writer_op_complete_Network.add_summary(summary_val_DQN_loss, episode_num + 1)
 
     #print('state(frame) mean {0}'.format(s.mean()))
     #print('s1(frame) mean {0}'.format(s1.mean()))
 
     print('Episode : '+str(episode_num)+' Total reward : '+str(curr_episode_total_reward)+' Total steps : '+str(steps_taken_per_episode))
     myBuffer.add(episodeBuffer.buffer)
-    summary_val, = sess_QNetwork.run([curr_episode_reward_summary], feed_dict={curr_episode_total_reward_placeholder: curr_episode_total_reward})
-    writer_op_QNetwork.add_summary(summary_val, episode_num + 1)
+
+    summary_val_curr_episode_reward, = sess.run([curr_episode_reward_summary], feed_dict={curr_episode_total_reward_placeholder: curr_episode_total_reward})
+    writer_op_complete_Network.add_summary(summary_val_curr_episode_reward, episode_num + 1)
     reward_per_episode_list.append(curr_episode_total_reward)
     mean_reward_over_window = sum(reward_per_episode_list[-mean_reward_window_len:]) / min(len(reward_per_episode_list), mean_reward_window_len)
-    summary_val, = sess_QNetwork.run([mean_reward_over_window_summary], feed_dict={mean_reward_over_window_placeholder: mean_reward_over_window})
-    writer_op_QNetwork.add_summary(summary_val, episode_num + 1)
+    summary_val_mean_reward_over_window, = sess.run([mean_reward_over_window_summary], feed_dict={mean_reward_over_window_placeholder: mean_reward_over_window})
+    writer_op_complete_Network.add_summary(summary_val_mean_reward_over_window, episode_num + 1)
     mean_reward_per_episode_window_list.append(mean_reward_over_window)
     steps_taken_per_episode_list.append(steps_taken_per_episode)
+
     # Periodically save the model.
     if(episode_num % model_saving_freq == 0 and episode_num>0):
-        saver_QNetwork.save(sess_QNetwork, path_QNetwork + '/model-' + str(episode_num) + '.ckpt')
+        saver.save(sess, path_Complete_Network + '/model-' + str(episode_num) + '.ckpt')
         print("Saved Model after episode : "+str(episode_num))
     if len(reward_per_episode_list) % 10 == 0:
         print('Total steps taken till now, mean reward per episode, current epsilon :::::: ')
@@ -370,8 +385,8 @@ end_episode_time = time.time()
 duration = end_episode_time-start_time
 duration = datetime.timedelta(seconds=duration)
 print('Total running time is {0}'.format(duration))
-saver_QNetwork.save(sess_QNetwork, path_QNetwork + '/model-' + str(episode_num) + '.ckpt')
-writer_op_QNetwork.close()
+saver.save(sess, path_Complete_Network + '/model-' + str(episode_num) + '.ckpt')
+writer_op_complete_Network.close()
 
 print("Percent of succesful episodes: " + str(sum(reward_per_episode_list) / num_episodes) + "%")
 
