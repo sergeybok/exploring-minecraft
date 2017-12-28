@@ -33,7 +33,7 @@ class Compressor:
 		self.prediction_flattened = tf.contrib.layers.flatten(self.predicted_image)
 
 		self.predictor_loss = tf.reduce_mean(tf.square(self.state_tp1 - self.prediction_flattened))
-		self.optimizer = tf.train.AdamOptimizer(learning_rate=0.0001)
+		self.optimizer = tf.train.AdamOptimizer(learning_rate=0.0004)
 		gvs = self.optimizer.compute_gradients(self.predictor_loss,var_list=self.compressor_weights)
 		#if gvs == None:
 		#	print ('helll oooo ooo ======')

@@ -21,6 +21,37 @@ use_complete_random_agent = False
 historical_sample_size = 100
 
 
+
+
+# ### Training the network
+# Setting all the training parameters
+batch_size = 100  # How many experiences to use for each training step.
+gamma_discount_factor = .9999  # Discount factor on the target Q-values
+startE = 0.5  # Starting chance of random action
+endE = 0.05  # Final chance of random action
+annealing_steps = 7000  # How many steps of training to reduce startE to endE.
+batch_size_deconv_compressor = 10
+intrinsic_reward_rescaling_factor = 100
+num_episodes = 200  # How many episodes of game environment to train network with.
+if(use_complete_random_agent):
+    update_freq_per_episodes = num_episodes # How often to perform a training step.
+else:
+    update_freq_per_episodes = 1  # How often to perform a training step.
+pre_train_steps = 100  # How many steps of random actions before training begins.
+max_actions_per_episode = 160  # The max allowed length of our episode.
+load_model = False  # Whether to load a saved model.
+path_QNetwork = "./curiosity_model/dqn_model"  # The path to save our model to.
+path_Frame_Predictor = "./curiosity_model/frame_predictor_model"  # The path to save our model to.
+model_saving_freq = 50
+# h_size = 512  # The size of the final convolutional layer before splitting it into Advantage and Value streams.
+tau = 0.001  # Rate to update target network toward primary network
+num_previous_frames = 4
+previous_frames = []
+
+
+
+
+
 class Qnetwork():
     def __init__(self, frame_height=None, frame_width=None, frame_channels=None, total_num_actions=None):
         flattened_frame_size = frame_height*frame_width*frame_channels
@@ -123,30 +154,7 @@ def target_network_update_op(Q_main_variables, Q_target_variables, tau):
         grouped_target_network_update_op = tf.group(*target_network_update_ops)
     return grouped_target_network_update_op
 
-# ### Training the network
-# Setting all the training parameters
-batch_size = 100  # How many experiences to use for each training step.
-gamma_discount_factor = .9999  # Discount factor on the target Q-values
-startE = 0.5  # Starting chance of random action
-endE = 0.05  # Final chance of random action
-annealing_steps = 7000  # How many steps of training to reduce startE to endE.
-batch_size_deconv_compressor = 10
-intrinsic_reward_rescaling_factor = 2
-num_episodes = 5  # How many episodes of game environment to train network with.
-if(use_complete_random_agent):
-    update_freq_per_episodes = num_episodes # How often to perform a training step.
-else:
-    update_freq_per_episodes = 1  # How often to perform a training step.
-pre_train_steps = 100  # How many steps of random actions before training begins.
-max_actions_per_episode = 160  # The max allowed length of our episode.
-load_model = False  # Whether to load a saved model.
-path_QNetwork = "./curiosity_model/dqn_model"  # The path to save our model to.
-path_Frame_Predictor = "./curiosity_model/frame_predictor_model"  # The path to save our model to.
-model_saving_freq = 50
-# h_size = 512  # The size of the final convolutional layer before splitting it into Advantage and Value streams.
-tau = 0.001  # Rate to update target network toward primary network
-num_previous_frames = 4
-previous_frames = []
+
 
 
 QNetwork_graph = tf.Graph()
@@ -231,7 +239,7 @@ for episode_num in range(num_episodes):
     curr_episode_total_reward = 0
     maze_env.get_maze()
     episodeBuffer = experience_buffer()
-    s = maze_env.get_current_state()
+    s = maze_env.get_current_state()/255.0
     is_terminal_flag = False
     steps_taken_per_episode = 0
     # The Q-Network
@@ -256,7 +264,7 @@ for episode_num in range(num_episodes):
         if(action_result):
             is_terminal_flag = action_result[2]
             if(not(is_terminal_flag)):
-                s1 = action_result[0]
+                s1 = action_result[0] / 255.0
                 # TODO save cnn_features_state_s1, that is the convolved output of next frame used for predictor loss
                 r = action_result[1]
             else:
@@ -282,8 +290,9 @@ for episode_num in range(num_episodes):
             break
 
     if use_intrinsic_reward and not myBuffer.is_empty():
-        number_batches = len(episodeBuffer.buffer)//batch_size_deconv_compressor
-        for i in range(number_batches):
+        Compressor_n_batches = len(episodeBuffer.buffer)//batch_size_deconv_compressor
+        avg_l = 0
+        for i in range(Compressor_n_batches):
             curr_batch = episodeBuffer.buffer[i*batch_size_deconv_compressor:(i+1)*batch_size_deconv_compressor]
             curr_batch = np.reshape(np.array(curr_batch), [len(curr_batch), 5])
             curr_batch_state_features = np.vstack(curr_batch[:, 0])
@@ -302,16 +311,23 @@ for episode_num in range(num_episodes):
 
             pred_t = curiosity.predict_next_state(sess_QNetwork,state_feature_sample,action_sample)
             intrinsic_r = curiosity.get_reward(predictions_t=pred_t,predictions_tm1=pred_tm1,targets=state_tp1)
-            intrinsic_r = min(intrinsic_r * intrinsic_reward_rescaling_factor, 1)
+            intrinsic_r = intrinsic_r * intrinsic_reward_rescaling_factor
 
             curr_batch = episodeBuffer.buffer[i * batch_size_deconv_compressor:(i + 1) * batch_size_deconv_compressor]
             for list_index in range(len(curr_batch)):
                 curr_batch[list_index][2] += intrinsic_r
+            #print('intrinsic Reward {0}'.format(intrinsic_r))
+
+            avg_l += l/Compressor_n_batches
+        print('compressor loss {0}'.format(avg_l))
+
 
     #TODO Figure out why is it not being trained for the episode 1
     if total_steps > pre_train_steps:
         if (episode_num % (update_freq_per_episodes) == 0 and episode_num > 0):
-            for batch_num in range(10):
+            avg_l = 0
+            Q_n_batches = 10
+            for batch_num in range(Q_n_batches):
                 trainBatch, actual_sampled_size = myBuffer.sample(batch_size)  # Get a random batch of experiences.
                 # Below we perform the Double-DQN update to the target Q-values
                 Q1 = sess_QNetwork.run(mainQN.predict, feed_dict={mainQN.flattened_image: np.vstack(trainBatch[:, 3])})
@@ -324,8 +340,13 @@ for episode_num in range(num_episodes):
                 # Update the network with our target values.
                 # NOTE ::: it is important to recalculate the Q values of the states in the experience replay and then get the gradient w.r.t difference b/w recalculated values and targets
                 # NOTE ::: otherwise it defeats the purpose of experience replay, also we are not storing the Q values for this reason
-                _,_ = sess_QNetwork.run([mainQN.train_Q_op,mainQN.train_cnn_op], feed_dict={mainQN.flattened_image: np.vstack(trainBatch[:, 0]), mainQN.targetQ: targetQ, mainQN.actions: trainBatch[:, 1]})
+                _,_,l = sess_QNetwork.run([mainQN.train_Q_op,mainQN.train_cnn_op,mainQN.loss], feed_dict={mainQN.flattened_image: np.vstack(trainBatch[:, 0]), mainQN.targetQ: targetQ, mainQN.actions: trainBatch[:, 1]})
                 _ = sess_QNetwork.run(grouped_target_network_update_op)
+                avg_l += l/Q_n_batches
+            print('Qloss {0}'.format(avg_l))
+
+    #print('state(frame) mean {0}'.format(s.mean()))
+    #print('s1(frame) mean {0}'.format(s1.mean()))
 
     print('Episode : '+str(episode_num)+' Total reward : '+str(curr_episode_total_reward)+' Total steps : '+str(steps_taken_per_episode))
     myBuffer.add(episodeBuffer.buffer)
