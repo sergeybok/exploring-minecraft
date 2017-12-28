@@ -16,48 +16,49 @@ import Reward
 import maze_environment
 
 
-use_intrinsic_reward = False
+use_intrinsic_reward = True
 use_complete_random_agent = False
 historical_sample_size = 100
 
 
 class Qnetwork():
-    def __init__(self, frame_height=None, frame_width=None, frame_channels=None, total_num_actions=None):
+    def __init__(self, scope, frame_height=None, frame_width=None, frame_channels=None, total_num_actions=None):
         flattened_frame_size = frame_height*frame_width*frame_channels
         self.flattened_image = tf.placeholder(shape=[None, flattened_frame_size], dtype=tf.float32)
         #[batch, in_height, in_width, in_channels]
         #[filter_height, filter_width, in_channels, out_channels]
         # Must have strides[0] = strides[3] = 1. For the most common case of the same horizontal and vertices strides, strides = [1, stride, stride, 1].
 
-        self.state_feature_vector = Perception.CNN(input=self.flattened_image,height=frame_height,width=frame_width,in_channel=frame_channels,out_channel=64)
+        self.state_feature_vector, self.CNN_params = Perception.CNN(input=self.flattened_image,height=frame_height,width=frame_width,in_channel=frame_channels,out_channel=32)
 
+        with tf.variable_scope(scope) as tf_scope:
         #NOTE :::: Split is not really required, also even if you use split, it should be done on the dimension of feature maps. Also the weight matrices have to be correctly shaped.
-        with tf.variable_scope("advantage_stream"):
-            self.streamAC = self.state_feature_vector
-            self.streamA = tf.contrib.layers.flatten(self.streamAC)
-            xavier_init = tf.contrib.layers.xavier_initializer(seed=8739)
-            self.AW1 = tf.Variable(xavier_init([self.streamA.shape[1].value, 512]), name='FC_1_Weights')
-            self.ABias1 = tf.Variable(tf.constant(0.1, shape=[512]), name='FC_1_Bias')
-            self.Advantage_FC1 = tf.matmul(self.streamA, self.AW1) + self.ABias1
-            self.Advantage_FC1 = tf.nn.relu(self.Advantage_FC1)
-            xavier_init = tf.contrib.layers.xavier_initializer(seed=8536)
-            self.AW2 = tf.Variable(xavier_init([self.Advantage_FC1.shape[1].value, total_num_actions]), name='FC_2_Weights')
-            self.ABias2 = tf.Variable(tf.constant(0.1, shape=[total_num_actions]), name='FC_2_Bias')
-            self.Advantage = tf.matmul(self.Advantage_FC1, self.AW2) + self.ABias2
-
-        with tf.variable_scope("value_stream"):
-            self.streamVC = self.state_feature_vector
-            self.streamV = tf.contrib.layers.flatten(self.streamVC)
-            xavier_init = tf.contrib.layers.xavier_initializer(seed=8635)
-            self.VW1 = tf.Variable(xavier_init([self.streamV.shape[1].value, 512]), name='FC_1_Weights')
-            self.VBias1 = tf.Variable(tf.constant(0.1, shape=[512]), name='FC_1_Bias')
-            self.Value_FC1 = tf.matmul(self.streamV, self.VW1) + self.VBias1
-            self.Value_FC1 = tf.nn.relu(self.Value_FC1)
-            xavier_init = tf.contrib.layers.xavier_initializer(seed=8267)
-            self.VW2 = tf.Variable(xavier_init([self.Value_FC1.shape[1].value, 1]), name='FC_2_Weights')
-            self.VBias2 = tf.Variable(tf.constant(0.1, shape=[1]), name='FC_2_Bias')
-            self.Value = tf.matmul(self.Value_FC1, self.VW2) + self.VBias2
-
+            with tf.variable_scope("advantage_stream"):
+                self.streamAC = self.state_feature_vector
+                self.streamA = tf.contrib.layers.flatten(self.streamAC)
+                xavier_init = tf.contrib.layers.xavier_initializer(seed=8739)
+                self.AW1 = tf.Variable(xavier_init([self.streamA.shape[1].value, 512]), name='FC_1_Weights')
+                self.ABias1 = tf.Variable(tf.constant(0.1, shape=[512]), name='FC_1_Bias')
+                self.Advantage_FC1 = tf.matmul(self.streamA, self.AW1) + self.ABias1
+                self.Advantage_FC1 = tf.nn.relu(self.Advantage_FC1)
+                xavier_init = tf.contrib.layers.xavier_initializer(seed=8536)
+                self.AW2 = tf.Variable(xavier_init([self.Advantage_FC1.shape[1].value, total_num_actions]), name='FC_2_Weights')
+                self.ABias2 = tf.Variable(tf.constant(0.1, shape=[total_num_actions]), name='FC_2_Bias')
+                self.Advantage = tf.matmul(self.Advantage_FC1, self.AW2) + self.ABias2
+                self.advantage_w = [self.AW1, self.ABias1,self.AW2,self.ABias2]
+            with tf.variable_scope("value_stream"):
+                self.streamVC = self.state_feature_vector
+                self.streamV = tf.contrib.layers.flatten(self.streamVC)
+                xavier_init = tf.contrib.layers.xavier_initializer(seed=8635)
+                self.VW1 = tf.Variable(xavier_init([self.streamV.shape[1].value, 512]), name='FC_1_Weights')
+                self.VBias1 = tf.Variable(tf.constant(0.1, shape=[512]), name='FC_1_Bias')
+                self.Value_FC1 = tf.matmul(self.streamV, self.VW1) + self.VBias1
+                self.Value_FC1 = tf.nn.relu(self.Value_FC1)
+                xavier_init = tf.contrib.layers.xavier_initializer(seed=8267)
+                self.VW2 = tf.Variable(xavier_init([self.Value_FC1.shape[1].value, 1]), name='FC_2_Weights')
+                self.VBias2 = tf.Variable(tf.constant(0.1, shape=[1]), name='FC_2_Bias')
+                self.Value = tf.matmul(self.Value_FC1, self.VW2) + self.VBias2
+                self.value_w = [self.VW1,self.VBias1,self.VW2,self.VBias2]
         # NOTE ::: Add the state value and advantage value to get the q values but note that we subtract the average advantage value from advantage value of all actions.
         self.Qout = self.Value + tf.subtract(self.Advantage, tf.reduce_mean(self.Advantage, axis=1, keep_dims=True))
         # NOTE :: we take argmax over advantage values instead of Q values
@@ -72,26 +73,20 @@ class Qnetwork():
 
         self.td_error = tf.square(self.targetQ - self.Q)
         self.loss = tf.reduce_mean(self.td_error)
-        network_scope_name = tf.get_variable_scope().name
-        if(network_scope_name=='Q_main'):
+        #network_scope_name = tf.get_variable_scope().name
+        if(scope=='Q_main'):
+            Q_vars = self.advantage_w + self.value_w
             self.optimizer = tf.train.AdamOptimizer(learning_rate=0.0001)
-            gvs = self.optimizer.compute_gradients(self.loss)
+            gvs = self.optimizer.compute_gradients(self.loss,var_list=Q_vars)
             with tf.variable_scope("gradient_clipping"):
                 capped_gvs = [(tf.clip_by_norm(grad, 10.0), var) for grad, var in gvs]
-            self.train_op = self.optimizer.apply_gradients(capped_gvs)
+            self.train_Q_op = self.optimizer.apply_gradients(capped_gvs)
+            gvs_cnn = self.optimizer.compute_gradients(self.loss,var_list=self.CNN_params)
+            with tf.variable_scope("gradient_clipping_cnn"):
+                capped_gvs = [(tf.clip_by_norm(grad, 10.0), var) for grad, var in gvs_cnn]
+            self.train_cnn_op = self.optimizer.apply_gradients(capped_gvs)
             # self.train_op = self.optimizer.minimize(self.loss)
 
-    def conv_layer(self, input_volume = None, num_output_channel = None, filter_shape = None, strides_shape = None, padding_type = None, network_name=None, layer_name = None,):
-        std_dev = 0.1
-        W_shape = [filter_shape[0], filter_shape[1], input_volume.shape[3].value, num_output_channel]
-        W = tf.Variable(tf.truncated_normal(W_shape, stddev=std_dev), name=network_name+'_Filter_'+layer_name)
-        b_shape = [num_output_channel]
-        b = tf.Variable(tf.constant(0.1, shape=b_shape), name=network_name+'_bias_'+layer_name)
-        conv = tf.nn.conv2d(input_volume, W, strides_shape, padding=padding_type, name=network_name+'_Conv_'+layer_name)
-        conv = conv + b
-        relu = tf.nn.elu(conv, name=network_name+'_ReLU_'+layer_name)
-        # relu = tf.nn.relu(conv, name=network_name+'_ReLU_'+layer_name)
-        return relu
 
 
 
@@ -111,7 +106,7 @@ class experience_buffer():
         #Since we have 5 elements in the experience : s, a, r, s1, is_terminal_flag, therefore we reshape it as [size, 5]
         if(size>len(self.buffer)):
             size = len(self.buffer)
-        return (np.reshape(np.array(random.sample(self.buffer, size)), [size, 6]), size)
+        return (np.reshape(np.array(random.sample(self.buffer, size)), [size, 5]), size)
 
     def is_empty(self):
         return len(self.buffer) == 0
@@ -121,6 +116,8 @@ def target_network_update_op(Q_main_variables, Q_target_variables, tau):
     target_network_update_ops = []
     with tf.variable_scope("target_network_update_ops"):
         for main_network_var, target_network_var in zip(sorted(Q_main_variables, key=lambda v: v.name), sorted(Q_target_variables, key=lambda v: v.name)):
+            #print('main var name {0}'.format(main_network_var.name))
+            #print('tgt var name {0}'.format(target_network_var))
             assign_value = (main_network_var.value()*tau) + ((1 - tau)*target_network_var.value())
             update_op = target_network_var.assign(assign_value)
             target_network_update_ops.append(update_op)
@@ -154,7 +151,7 @@ previous_frames = []
 
 
 QNetwork_graph = tf.Graph()
-Frame_Predictor_graph = tf.Graph()
+#Frame_Predictor_graph = tf.Graph()
 
 port_number = 10000
 maze_env = maze_environment.environment(port_number)
@@ -162,27 +159,22 @@ frame_height = maze_env.video_height
 frame_width = maze_env.video_width
 frame_channels = maze_env.video_channels
 #TODO define whether the actions are continous or discrete
-with QNetwork_graph.as_default():
-    total_num_actions = maze_env.total_num_actions
-    with tf.variable_scope("Q_main") as Q_main_scope:
-        mainQN = Qnetwork(frame_height=frame_height, frame_width=frame_width, frame_channels=frame_channels, total_num_actions=total_num_actions)
-    with tf.variable_scope("Q_target") as Q_target_scope:
-        targetQN = Qnetwork(frame_height=frame_height, frame_width=frame_width, frame_channels=frame_channels, total_num_actions=total_num_actions)
-    saver_QNetwork = tf.train.Saver()
-    init_QNetwork_graph = tf.global_variables_initializer()
-    #IMPORTANT NOTE::: When a scope is passed to the following tf.get_collection it returns only those trainable variables which are named.
-    # So it is important to name all the trainable variables.
-    Q_main_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=Q_main_scope.name)
-    Q_target_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=Q_target_scope.name)
-    grouped_target_network_update_op = target_network_update_op(Q_main_variables, Q_target_variables, tau)
+
+total_num_actions = maze_env.total_num_actions
+mainQN = Qnetwork(frame_height=frame_height, scope='Q_main', frame_width=frame_width, frame_channels=frame_channels, total_num_actions=total_num_actions)
+targetQN = Qnetwork(frame_height=frame_height,scope='Q_target', frame_width=frame_width, frame_channels=frame_channels, total_num_actions=total_num_actions)
+saver_QNetwork = tf.train.Saver()
+
+#IMPORTANT NOTE::: When a scope is passed to the following tf.get_collection it returns only those trainable variables which are named.
+# So it is important to name all the trainable variables.
+Q_main_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Q_main')
+Q_target_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='Q_target')
+grouped_target_network_update_op = target_network_update_op(Q_main_variables, Q_target_variables, tau)
 
 
 if use_intrinsic_reward:
-    with Frame_Predictor_graph.as_default():
-        curiosity = Reward.Compressor(frame_height=frame_height, frame_width=frame_width, frame_channels=frame_channels, state_feature_size=mainQN.state_feature_vector.shape[1].value,
-                                    total_num_actions=total_num_actions, network_name='compressor')
-        init_Frame_Predictor_graph = tf.global_variables_initializer()
-        saver_Frame_Predictor = tf.train.Saver()
+    curiosity = Reward.Compressor(frame_height=frame_height, frame_width=frame_width, frame_channels=frame_channels, state_feature_size=mainQN.state_feature_vector.shape[1].value,total_num_actions=total_num_actions, network_name='compressor')
+    
 
 myBuffer = experience_buffer()
 
@@ -200,33 +192,30 @@ total_steps = 0
 # Make a path for our model to be saved in.
 if not os.path.exists(path_QNetwork):
     os.makedirs(path_QNetwork)
-if not os.path.exists(path_Frame_Predictor):
-    os.makedirs(path_Frame_Predictor)
 
-with QNetwork_graph.as_default():
-    curr_episode_total_reward_placeholder = tf.placeholder(tf.float32, name='curr_episode_total_reward')
-    curr_episode_reward_summary = tf.summary.scalar("Per episode reward", curr_episode_total_reward_placeholder)
-    mean_reward_over_window_placeholder = tf.placeholder(tf.float32, name='mean_reward_over_window')
-    mean_reward_over_window_summary = tf.summary.scalar("Mean episodic reward over window", mean_reward_over_window_placeholder)
 
-sess_QNetwork = tf.Session(graph=QNetwork_graph)
+curr_episode_total_reward_placeholder = tf.placeholder(tf.float32, name='curr_episode_total_reward')
+curr_episode_reward_summary = tf.summary.scalar("Per episode reward", curr_episode_total_reward_placeholder)
+mean_reward_over_window_placeholder = tf.placeholder(tf.float32, name='mean_reward_over_window')
+mean_reward_over_window_summary = tf.summary.scalar("Mean episodic reward over window", mean_reward_over_window_placeholder)
+
+
+init_QNetwork_graph = tf.global_variables_initializer()
+sess_QNetwork = tf.Session()
+
 
 tf_graph_file_name = './curiosity_model/tf_graphs/subgoal_{0}_goal_{1}_size_{2}'.format(maze_env.reward_subgoal, maze_env.reward_goal, maze_env.maze_size)
 if not os.path.exists(tf_graph_file_name):
     os.makedirs(tf_graph_file_name)
 writer_op_QNetwork = tf.summary.FileWriter(tf_graph_file_name, sess_QNetwork.graph)
 sess_QNetwork.run(init_QNetwork_graph)
-if use_intrinsic_reward:
-    sess_Frame_Predictor = tf.Session(graph=Frame_Predictor_graph)
-    sess_Frame_Predictor.run(init_Frame_Predictor_graph)
+
 curr_episode_total_reward_summary = tf.Summary()
 if load_model == True:
     print('Loading Model...')
     ckpt_QNetwork = tf.train.get_checkpoint_state(path_QNetwork)
-    ckpt_Frame_Predictor = tf.train.get_checkpoint_state(path_Frame_Predictor)
     saver.restore(sess_QNetwork, ckpt_QNetwork.model_checkpoint_path)
-    if use_intrinsic_reward:
-        saver.restore(sess_Frame_Predictor, ckpt_Frame_Predictor.model_checkpoint_path)
+    
 
 start_time = time.time()
 for episode_num in range(num_episodes):
@@ -268,7 +257,7 @@ for episode_num in range(num_episodes):
             break
         total_steps += 1
 
-        episodeBuffer.add(np.reshape(np.array([s, a, r, s1, is_terminal_flag,cnn_features_state_s]), [1, 6]))  # Save the experience to our episode buffer.
+        episodeBuffer.add(np.reshape(np.array([s, a, r, s1, is_terminal_flag]), [1, 5]))  # Save the experience to our episode buffer.
         # Since we have 6 elements in the experience : s, a, r, s1, is_terminal_flag, cnn_s, therefore we reshape it as [size, 6]
 
         curr_episode_total_reward += r
@@ -287,22 +276,22 @@ for episode_num in range(num_episodes):
         number_batches = len(episodeBuffer.buffer)//batch_size_deconv_compressor
         for i in range(number_batches):
             curr_batch = episodeBuffer.buffer[i*batch_size_deconv_compressor:(i+1)*batch_size_deconv_compressor]
-            curr_batch = np.reshape(np.array(curr_batch), [len(curr_batch), 6])
-            curr_batch_state_features = np.vstack(curr_batch[:, 5])
+            curr_batch = np.reshape(np.array(curr_batch), [len(curr_batch), 5])
+            curr_batch_state_features = np.vstack(curr_batch[:, 0])
             curr_batch_actions = curr_batch[:, 1]
             curr_batch_states_tp1 = np.vstack(curr_batch[:, 3])
 
             sample_, _ = myBuffer.sample(historical_sample_size)
-            state_feature_sample = np.vstack(sample_[:,5])
+            state_feature_sample = np.vstack(sample_[:,0])
             # action_sample = np.vstack(sample_[:,1]).astype(np.uint8)
             action_sample = sample_[:,1]
             state_tp1 = np.vstack(sample_[:,3])
 
-            pred_tm1 = curiosity.predict_next_state(sess_Frame_Predictor, state_feature_sample, action_sample)
+            pred_tm1 = curiosity.predict_next_state(sess_QNetwork, state_feature_sample, action_sample)
 
-            l = curiosity.train(sess_Frame_Predictor,curr_batch_state_features, curr_batch_actions, curr_batch_states_tp1)
+            l = curiosity.train(sess_QNetwork,curr_batch_state_features, curr_batch_actions, curr_batch_states_tp1)
 
-            pred_t = curiosity.predict_next_state(sess_Frame_Predictor,state_feature_sample,action_sample)
+            pred_t = curiosity.predict_next_state(sess_QNetwork,state_feature_sample,action_sample)
             intrinsic_r = curiosity.get_reward(predictions_t=pred_t,predictions_tm1=pred_tm1,targets=state_tp1)
             intrinsic_r = min(intrinsic_r * intrinsic_reward_rescaling_factor, 1)
 
@@ -326,7 +315,7 @@ for episode_num in range(num_episodes):
                 # Update the network with our target values.
                 # NOTE ::: it is important to recalculate the Q values of the states in the experience replay and then get the gradient w.r.t difference b/w recalculated values and targets
                 # NOTE ::: otherwise it defeats the purpose of experience replay, also we are not storing the Q values for this reason
-                _ = sess_QNetwork.run(mainQN.train_op, feed_dict={mainQN.flattened_image: np.vstack(trainBatch[:, 0]), mainQN.targetQ: targetQ, mainQN.actions: trainBatch[:, 1]})
+                _,_ = sess_QNetwork.run([mainQN.train_Q_op,mainQN.train_cnn_op], feed_dict={mainQN.flattened_image: np.vstack(trainBatch[:, 0]), mainQN.targetQ: targetQ, mainQN.actions: trainBatch[:, 1]})
                 _ = sess_QNetwork.run(grouped_target_network_update_op)
 
     print('Episode : '+str(episode_num)+' Total reward : '+str(curr_episode_total_reward)+' Total steps : '+str(steps_taken_per_episode))
@@ -342,8 +331,6 @@ for episode_num in range(num_episodes):
     # Periodically save the model.
     if(episode_num % model_saving_freq == 0 and episode_num>0):
         saver_QNetwork.save(sess_QNetwork, path_QNetwork + '/model-' + str(episode_num) + '.ckpt')
-        if(use_intrinsic_reward):
-            saver_Frame_Predictor.save(sess_Frame_Predictor, path_Frame_Predictor + '/model-' + str(episode_num) + '.ckpt')
         print("Saved Model after episode : "+str(episode_num))
     if len(reward_per_episode_list) % 10 == 0:
         print('Total steps taken till now, mean reward per episode, current epsilon :::::: ')
@@ -354,8 +341,6 @@ duration = end_episode_time-start_time
 duration = datetime.timedelta(seconds=duration)
 print('Total running time is {0}'.format(duration))
 saver_QNetwork.save(sess_QNetwork, path_QNetwork + '/model-' + str(episode_num) + '.ckpt')
-if use_intrinsic_reward:
-    saver_Frame_Predictor.save(sess_Frame_Predictor, path_Frame_Predictor + '/model-' + str(episode_num) + '.ckpt')
 writer_op_QNetwork.close()
 
 print("Percent of succesful episodes: " + str(sum(reward_per_episode_list) / num_episodes) + "%")
