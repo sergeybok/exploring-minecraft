@@ -8,7 +8,7 @@ import Perception
 
 class Compressor:
 
-	def __init__(self,frame_height=None, frame_width=None, frame_channels=None,state_feature_size=None, total_num_actions=None, network_name=None):
+	def __init__(self,frame_height=None, frame_width=None, frame_channels=None,state_feature_size=None, total_num_actions=None, CNN_W=[], network_name=None):
 
 		self.flat_image = tf.placeholder(tf.float32,shape=[None,frame_height*frame_width*frame_channels],
 											name='Compressor_state_input')
@@ -20,7 +20,7 @@ class Compressor:
 		self.state_tp1 = tf.placeholder(tf.float32,shape=[None,frame_height*frame_width*frame_channels],
 										name='Compressor_state_tp1_input')
 
-		self.state_feature, self.CNN_w = Perception.CNN(input=self.flat_image,height=frame_height,width=frame_width,in_channel=frame_channels,out_channel=32)
+		self.state_feature, self.CNN_w = Perception.CNN(input=self.flat_image,height=frame_height,width=frame_width,in_channel=frame_channels,out_channel=32,weights=CNN_W)
 
 		self.predicted_image, self.compressor_weights = Perception.Predictor(state=self.state_feature,
 												state_size=state_feature_size,
