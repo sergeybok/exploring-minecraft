@@ -32,7 +32,7 @@ endE = 0.05  # Final chance of random action
 annealing_steps = 7000  # How many steps of training to reduce startE to endE.
 batch_size_deconv_compressor = 10
 intrinsic_reward_rescaling_factor = 100
-num_episodes = 20  # How many episodes of game environment to train network with.
+num_episodes = 2  # How many episodes of game environment to train network with.
 if(use_complete_random_agent):
     update_freq_per_episodes = num_episodes # How often to perform a training step.
 else:
@@ -282,7 +282,7 @@ for episode_num in range(num_episodes):
         total_steps += 1
 
         episodeBuffer.add(np.reshape(np.array([s, a, r, s1, is_terminal_flag]), [1, 5]))  # Save the experience to our episode buffer.
-        # Since we have 6 elements in the experience : s, a, r, s1, is_terminal_flag, cnn_s, therefore we reshape it as [size, 6]
+        # Since we have 5 elements in the experience : s, a, r, s1, is_terminal_flag, therefore we reshape it as [size, 5]
 
         curr_episode_total_reward += r
         s = s1

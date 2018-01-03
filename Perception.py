@@ -79,7 +79,7 @@ def CNN(input, height, width,in_channel, out_channel,afn=tf.nn.elu,weights=[]):
 
 
 
-def Deconv(input, height, width,network_name,in_channel=64,out_channel=3,afn=tf.nn.elu):
+def Deconv(input, height, width,network_name,in_channel=None,out_channel = None,afn=tf.nn.elu):
 
 	img = tf.reshape(input,shape=[-1,conv3_shape_1,conv3_shape_2,conv3_shape_3]) 
 	# This depends on the cnn output before flatten
@@ -109,7 +109,7 @@ def Deconv(input, height, width,network_name,in_channel=64,out_channel=3,afn=tf.
 	return dconv3, [dconv1_weights,dconv1_bias,dconv2_weights,dconv2_bias,dconv3_weights,dconv3_bias]
 
 
-def Predictor(state, action,action_space, height, width, network_name, state_size=None):
+def Predictor(state, action,action_space, height, width, out_channel, network_name, state_size=None):
 	scope = network_name+'_Predictor'
 	#state_size = tf.shape(state)[1]
 	xavier_init = tf.contrib.layers.xavier_initializer(seed=seed+7)
@@ -126,7 +126,7 @@ def Predictor(state, action,action_space, height, width, network_name, state_siz
 	pred_w = [in_state_weights,in_state_bias,in_action_weights,in_action_bias]
 
 	deconv_input = deconv_input_state * deconv_input_action
-	deconv_output, dconv_w = Deconv(deconv_input,height,width,network_name)
+	deconv_output, dconv_w = Deconv(deconv_input,height,width,network_name, out_channel=out_channel)
 	pred_w += dconv_w
 
 	return deconv_output, pred_w
