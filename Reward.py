@@ -36,16 +36,16 @@ class Compressor:
 		self.prediction_flattened = tf.contrib.layers.flatten(self.predicted_image)
 
 		self.predictor_loss = tf.reduce_mean(tf.square(self.state_tp1 - self.prediction_flattened))
-		self.optimizer = tf.train.AdamOptimizer(learning_rate=0.0004)
+		self.optimizer = tf.train.AdamOptimizer(learning_rate=0.0004, name='compressor_adam_opt')
 		gvs_dcnn = self.optimizer.compute_gradients(self.predictor_loss,var_list=self.compressor_weights)
 		#if gvs == None:
 		#	print ('helll oooo ooo ======')
 		# capped_gvs = [(tf.clip_by_norm(grad, 10.0), var) for grad, var in gvs]
 		capped_gvs_dcnn = gvs_dcnn
-		self.train_pred = self.optimizer.apply_gradients(capped_gvs_dcnn)
+		self.train_pred = self.optimizer.apply_gradients(capped_gvs_dcnn, name='compressor_weights_grad_update')
 
 		gvs_cnn = self.optimizer.compute_gradients(self.predictor_loss,var_list=self.CNN_w)
-		self.train_cnn = self.optimizer.apply_gradients(gvs_cnn)
+		self.train_cnn = self.optimizer.apply_gradients(gvs_cnn, name='CNN_weights_compressor_grad_update')
 
 
 	def trainDCNN(self,sess,states, actions, states_tp1):

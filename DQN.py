@@ -106,15 +106,15 @@ class Qnetwork():
         network_scope_name = tf.get_variable_scope().name
         if(network_scope_name=='Q_main'):
             Q_vars = self.advantage_w + self.value_w
-            self.optimizer = tf.train.AdamOptimizer(learning_rate=0.0001)
+            self.optimizer = tf.train.AdamOptimizer(learning_rate=0.0001, name='main_Q_network_adam_opt')
             gvs_Q = self.optimizer.compute_gradients(self.loss,var_list=Q_vars)
             with tf.variable_scope("gradient_clipping_Q_vars"):
                 capped_gvs_Q = [(tf.clip_by_norm(grad, 10.0), var) for grad, var in gvs_Q]
-            self.train_Q_op = self.optimizer.apply_gradients(capped_gvs_Q)
+            self.train_Q_op = self.optimizer.apply_gradients(capped_gvs_Q, name='Q_vars_grad_update')
             gvs_cnn = self.optimizer.compute_gradients(self.loss,var_list=self.CNN_params)
             with tf.variable_scope("gradient_clipping_cnn_vars"):
                 capped_gvs_cnn = [(tf.clip_by_norm(grad, 10.0), var) for grad, var in gvs_cnn]
-            self.train_cnn_op = self.optimizer.apply_gradients(capped_gvs_cnn)
+            self.train_cnn_op = self.optimizer.apply_gradients(capped_gvs_cnn, name='CNN_vars_grad_update')
             # self.train_op = self.optimizer.minimize(self.loss)
 
 
