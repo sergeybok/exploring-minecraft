@@ -60,7 +60,7 @@ class Qnetwork():
         #[filter_height, filter_width, in_channels, out_channels]
         # Must have strides[0] = strides[3] = 1. For the most common case of the same horizontal and vertices strides, strides = [1, stride, stride, 1].
 
-        self.state_feature_vector, self.CNN_params = Perception.CNN(input=self.flattened_image,height=frame_height,width=frame_width,in_channel=frame_channels,out_channel=32,weights=[])
+        self.state_feature_vector, self.CNN_params, self.conv1, self.conv2, self.conv3 = Perception.CNN(input=self.flattened_image,height=frame_height,width=frame_width,in_channel=frame_channels,out_channel=32,weights=[])
 
         #NOTE :::: Split is not really required, also even if you use split, it should be done on the dimension of feature maps. Also the weight matrices have to be correctly shaped.
         with tf.variable_scope("advantage_stream"):
@@ -107,18 +107,15 @@ class Qnetwork():
         if(network_scope_name=='Q_main'):
             Q_vars = self.advantage_w + self.value_w
             self.optimizer = tf.train.AdamOptimizer(learning_rate=0.0001, name='main_Q_network_adam_opt')
-            gvs_Q = self.optimizer.compute_gradients(self.loss,var_list=Q_vars)
+            self.gvs_Q = self.optimizer.compute_gradients(self.loss,var_list=Q_vars)
             with tf.variable_scope("gradient_clipping_Q_vars"):
-                capped_gvs_Q = [(tf.clip_by_norm(grad, 10.0), var) for grad, var in gvs_Q]
-            self.train_Q_op = self.optimizer.apply_gradients(capped_gvs_Q, name='Q_vars_grad_update')
-            gvs_cnn = self.optimizer.compute_gradients(self.loss,var_list=self.CNN_params)
+                self.capped_gvs_Q = [(tf.clip_by_norm(grad, 10.0), var) for grad, var in self.gvs_Q]
+            self.train_Q_op = self.optimizer.apply_gradients(self.capped_gvs_Q, name='Q_vars_grad_update')
+            self.gvs_cnn = self.optimizer.compute_gradients(self.loss,var_list=self.CNN_params)
             with tf.variable_scope("gradient_clipping_cnn_vars"):
-                capped_gvs_cnn = [(tf.clip_by_norm(grad, 10.0), var) for grad, var in gvs_cnn]
-            self.train_cnn_op = self.optimizer.apply_gradients(capped_gvs_cnn, name='CNN_vars_grad_update')
+                self.capped_gvs_cnn = [(tf.clip_by_norm(grad, 10.0), var) for grad, var in self.gvs_cnn]
+            self.train_cnn_op = self.optimizer.apply_gradients(self.capped_gvs_cnn, name='CNN_vars_grad_update')
             # self.train_op = self.optimizer.minimize(self.loss)
-
-
-
 
 # ### Experience Replay
 # This class allows us to store experiences and sample then randomly to train the network.
@@ -218,12 +215,68 @@ with tf.variable_scope("reward_scalars") as reward_scalars:
     avg_batch_intrinsic_reward_placeholder = tf.placeholder(tf.float32, name='avg_batch_intrinsic_reward')
     avg_batch_intrinsic_reward_summary = tf.summary.scalar("Avg batch intrinsic reward", avg_batch_intrinsic_reward_placeholder)
 
-
 with tf.variable_scope("loss_scalars") as loss_scalars:
     avg_batch_compressor_loss_placeholder = tf.placeholder(tf.float32, name='avg_batch_compressor_loss')
     avg_batch_compressor_loss_summary = tf.summary.scalar("Avg batch compressor loss", avg_batch_compressor_loss_placeholder)
     avg_batch_DQN_loss_placeholder = tf.placeholder(tf.float32, name='avg_batch_DQN_loss')
     avg_batch_DQN_loss_summary = tf.summary.scalar("Avg batch DQN loss", avg_batch_DQN_loss_placeholder)
+
+with tf.variable_scope("images") as image_summaries:
+    max_images_to_display = 5
+    with tf.variable_scope("input_images") as input_images_summaries:
+        input_frame_summary = tf.summary.image("input_frame", tf.reshape(mainQN.flattened_image, shape=[-1, frame_height, frame_width, frame_channels]), max_images_to_display)
+    with tf.variable_scope("cnn_features") as cnn_features_summaries:
+        max_images_to_display = 1
+        conv_layer_summary_list = []
+        for idx, conv_layer in enumerate([mainQN.conv1, mainQN.conv2, mainQN.conv3]):
+            with tf.variable_scope("conv_layer_"+str(idx+1)) as conv_layer_summaries:
+                conv_feature_summary_list = []
+                num_features = conv_layer.shape[3].value
+                for i in range(num_features):
+                    conv_feature_summary = tf.summary.image("cnn_"+str(idx+1)+"_feature_"+str(i), tf.slice(conv_layer, [0, 0, 0, i], [-1, conv_layer.shape[1].value, conv_layer.shape[2].value, 1]), max_images_to_display)
+                    conv_feature_summary_list.append(conv_feature_summary)
+                conv_feature_merged = tf.summary.merge(conv_feature_summary_list)
+                conv_layer_summary_list.append(conv_feature_merged)
+        cnn_merged_summaries = tf.summary.merge(conv_layer_summary_list)
+
+with tf.name_scope("Q_network_weights_summary") as Q_network_weights_summaries:
+    with tf.name_scope("FC_weights") as mainQN_fully_connected_layers_weights_summaries:
+        mainQN_FC_weights_list = [mainQN.AW1, mainQN.ABias1, mainQN.AW2, mainQN.ABias2, mainQN.VW1, mainQN.VBias1, mainQN.VW2, mainQN.VBias2]
+        mainQN_FC_weights_summary_list = []
+        for var in mainQN_FC_weights_list:
+            mainQN_FC_weights_summary_list.append(tf.summary.histogram(var.name, var))
+        merged_FC_weights_mainQN_summary = tf.summary.merge(mainQN_FC_weights_summary_list)
+    with tf.name_scope("CNN_weights") as cnn_weights_summaries:
+        cnn_weights_summary_list = []
+        for var in mainQN.CNN_params:
+            cnn_weights_summary_list.append(tf.summary.histogram(var.name, var))
+        merged_cnn_weights_summary = tf.summary.merge(cnn_weights_summary_list)
+    merged_weights_mainQN_summary = tf.summary.merge([merged_FC_weights_mainQN_summary, merged_cnn_weights_summary])
+
+with tf.name_scope("Q_network_grads") as Q_network_gradient_summaries:
+    with tf.name_scope("fully_connected_layers_grad") as mainQN_fully_connected_layers_grad_summaries:
+        with tf.name_scope("original_grads") as mainQN_original_grad_summaries:
+            mainQN_orig_grad_summary_list = []
+            for grad, var in mainQN.gvs_Q:
+                mainQN_orig_grad_summary_list.append(tf.summary.histogram(var.name + '_gradient', grad))
+            merged_orig_grad_mainQN_summary = tf.summary.merge(mainQN_orig_grad_summary_list)
+        with tf.name_scope("capped_grads") as mainQN_capped_grad_summaries:
+            mainQN_capped_grad_summary_list = []
+            for grad, var in mainQN.capped_gvs_Q:
+                mainQN_capped_grad_summary_list.append(tf.summary.histogram(var.name + '_gradient', grad))
+            merged_capped_grad_mainQN_summary = tf.summary.merge(mainQN_capped_grad_summary_list)
+    with tf.name_scope("CNN_grad") as mainQN_cnn_grad_summaries:
+        with tf.name_scope("original_grads") as mainQN_cnn_original_grad_summaries:
+            mainQN_cnn_orig_grad_summary_list = []
+            for grad, var in mainQN.gvs_Q:
+                mainQN_cnn_orig_grad_summary_list.append(tf.summary.histogram(var.name + '_gradient', grad))
+            merged_cnn_orig_grad_mainQN_summary = tf.summary.merge(mainQN_cnn_orig_grad_summary_list)
+        with tf.name_scope("capped_grads") as mainQN_cnn_capped_grad_summaries:
+            mainQN_cnn_capped_grad_summary_list = []
+            for grad, var in mainQN.capped_gvs_Q:
+                mainQN_cnn_capped_grad_summary_list.append(tf.summary.histogram(var.name + '_gradient', grad))
+            merged_cnn_capped_grad_mainQN_summary = tf.summary.merge(mainQN_cnn_capped_grad_summary_list)
+    merged_grad_mainQN_summary = tf.summary.merge([merged_orig_grad_mainQN_summary, merged_capped_grad_mainQN_summary, merged_cnn_orig_grad_mainQN_summary, merged_cnn_capped_grad_mainQN_summary])
 
 init_all_variables = tf.global_variables_initializer()
 sess = tf.Session()
@@ -315,7 +368,7 @@ for episode_num in range(num_episodes):
 
             pred_tm1 = curiosity.predict_next_state(sess, state_feature_sample, action_sample)
 
-            l = curiosity.train(sess,curr_batch_state_features, curr_batch_actions, curr_batch_states_tp1)
+            l = curiosity.train(sess,curr_batch_state_features, curr_batch_actions, curr_batch_states_tp1, writer_op_complete_Network, counter = episode_num*Compressor_n_batches+i+1)
 
             pred_t = curiosity.predict_next_state(sess,state_feature_sample,action_sample)
             intrinsic_r = curiosity.get_reward(predictions_t=pred_t,predictions_tm1=pred_tm1,targets=state_tp1)
@@ -351,12 +404,18 @@ for episode_num in range(num_episodes):
                 # Update the network with our target values.
                 # NOTE ::: it is important to recalculate the Q values of the states in the experience replay and then get the gradient w.r.t difference b/w recalculated values and targets
                 # NOTE ::: otherwise it defeats the purpose of experience replay, also we are not storing the Q values for this reason
-                _,_,l = sess.run([mainQN.train_Q_op,mainQN.train_cnn_op,mainQN.loss], feed_dict={mainQN.flattened_image: np.vstack(trainBatch[:, 0]), mainQN.targetQ: targetQ, mainQN.actions: trainBatch[:, 1]})
+                _,_,l, summary_val_grad_mainQN, summary_val_weights_mainQN = sess.run([mainQN.train_Q_op,mainQN.train_cnn_op,mainQN.loss, merged_grad_mainQN_summary, merged_weights_mainQN_summary],
+                                                                                      feed_dict={mainQN.flattened_image: np.vstack(trainBatch[:, 0]), mainQN.targetQ: targetQ, mainQN.actions: trainBatch[:, 1]})
                 _ = sess.run(grouped_target_network_update_op)
                 avg_batch_DQN_loss += float(l)/Q_n_batches
+                writer_op_complete_Network.add_summary(summary_val_grad_mainQN, episode_num*Q_n_batches+batch_num+1)
+                writer_op_complete_Network.add_summary(summary_val_weights_mainQN, episode_num * Q_n_batches + batch_num + 1)
             print('Qloss {0}'.format(avg_batch_DQN_loss))
             summary_val_DQN_loss, = sess.run([avg_batch_DQN_loss_summary], feed_dict={avg_batch_DQN_loss_placeholder: avg_batch_DQN_loss})
             writer_op_complete_Network.add_summary(summary_val_DQN_loss, episode_num + 1)
+            summary_val_input_images, summary_val_cnn_merged = sess.run([input_frame_summary, cnn_merged_summaries], feed_dict={mainQN.flattened_image: np.vstack(trainBatch[:5, 3])})
+            writer_op_complete_Network.add_summary(summary_val_input_images, episode_num + 1)
+            writer_op_complete_Network.add_summary(summary_val_cnn_merged, episode_num + 1)
 
     #print('state(frame) mean {0}'.format(s.mean()))
     #print('s1(frame) mean {0}'.format(s1.mean()))

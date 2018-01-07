@@ -14,7 +14,7 @@ class environment():
         self.reward_optimal_path = 0
         self.reward_subgoal = 0
         self.reward_goal = 10
-        self.every_action_penalty = -0.1
+        self.every_action_penalty = 0.0
         self.maze_size = 10
         self.episode_time_limit = 8000
         self.port_number = port_number
