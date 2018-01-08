@@ -15,13 +15,9 @@ import Reward
 # from environments import maze_environment
 import maze_environment
 
-
 use_intrinsic_reward = True
 use_complete_random_agent = False
 historical_sample_size = 100
-
-
-
 
 # ### Training the network
 # Setting all the training parameters
@@ -49,8 +45,6 @@ num_previous_frames = 4
 previous_frames = []
 
 state_frame_normalization_factor = 255.0
-
-
 
 class Qnetwork():
     def __init__(self, frame_height=None, frame_width=None, frame_channels=None, total_num_actions=None):
@@ -151,9 +145,6 @@ def target_network_update_op(Q_main_variables, Q_target_variables, tau):
         grouped_target_network_update_op = tf.group(*target_network_update_ops)
     return grouped_target_network_update_op
 
-
-
-
 QNetwork_graph = tf.Graph()
 #Frame_Predictor_graph = tf.Graph()
 
@@ -164,16 +155,12 @@ frame_width = maze_env.video_width
 frame_channels = maze_env.video_channels
 #TODO define whether the actions are continous or discrete
 
-
-
-
 total_num_actions = maze_env.total_num_actions
 
 with tf.variable_scope("Q_main") as Q_main_scope:
     mainQN = Qnetwork(frame_height=frame_height, frame_width=frame_width, frame_channels=frame_channels, total_num_actions=total_num_actions)
 with tf.variable_scope("Q_target") as Q_target_scope:
     targetQN = Qnetwork(frame_height=frame_height, frame_width=frame_width, frame_channels=frame_channels, total_num_actions=total_num_actions)
-   
 
 saver = tf.train.Saver()
 
@@ -188,7 +175,6 @@ if use_intrinsic_reward:
     curiosity = Reward.Compressor(frame_height=frame_height, frame_width=frame_width, frame_channels=frame_channels, 
                             state_feature_size=mainQN.state_feature_vector.shape[1].value, CNN_W=mainQN.CNN_params,
                             total_num_actions=total_num_actions, network_name='compressor')
-    
 
 myBuffer = experience_buffer()
 
@@ -292,7 +278,6 @@ if load_model == True:
     print('Loading Model...')
     ckpt_complete_Network = tf.train.get_checkpoint_state(path_Complete_Network)
     saver.restore(sess, ckpt_complete_Network.model_checkpoint_path)
-
 
 start_time = time.time()
 for episode_num in range(num_episodes):
@@ -463,4 +448,3 @@ pickle.dump(results_dict, fp)
 fp.close()
 
 plt.plot(reward_per_episode_list)
-

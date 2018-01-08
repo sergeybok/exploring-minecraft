@@ -13,10 +13,14 @@ class environment():
         self.ms_per_tick = 50
         self.reward_optimal_path = 0
         self.reward_subgoal = 0
-        self.reward_goal = 10
+        self.reward_goal = 0
+        self.reward_for_reaching_goal_position = 1.0
+        self.goal_position = (9.5, 7.0, 13.5)
+        self.error_margin_in_reaching_goal_position = 1.0
         self.every_action_penalty = 0.0
         self.maze_size = 10
         self.episode_time_limit = 8000
+        self.camera_position = 0 #The camera position to use. 0 = first person, 1 = behind, 2 = facing.
         self.port_number = port_number
 
         self.maze4 = '''
@@ -111,6 +115,10 @@ class environment():
         my_mission_record.setDestination(self.recordingsDirectory + "//" + "Mission_" + str(self.curr_episode_num) + ".tgz")
         mazeblock = random.choice(self.mazeblocks)
         my_mission = MalmoPython.MissionSpec(self.GetMissionXML(mazeblock), self.validate)
+        # Sets the camera position. Modifies the existing video request, so call this after requestVideo or requestVideoWithDepth.
+        # param viewpoint  The camera position to use. 0 = first person, 1 = behind, 2 = facing.
+        my_mission.setViewpoint(self.camera_position)
+        my_mission.rewardForReachingPosition(self.goal_position[0], self.goal_position[1], self.goal_position[2], self.reward_for_reaching_goal_position, self.error_margin_in_reaching_goal_position)
 
         client_pool = MalmoPython.ClientPool()
         client_pool.add(MalmoPython.ClientInfo("127.0.0.1", self.port_number))
@@ -183,6 +191,7 @@ class environment():
                     <Placement x="-204" y="81" z="217" yaw="-40" pitch="30"/>
                 </AgentStart>
                 <AgentHandlers>
+                    <ObservationFromFullStats/>
                     <DiscreteMovementCommands/>
                     <VideoProducer want_depth=" '''+str(self.want_depth_channel)+''' ">
                         <Width>''' + str(self.video_width) + '''</Width>
@@ -207,15 +216,24 @@ class environment():
                 self.world_state = self.agent_host.getWorldState()
             if(self.world_state.number_of_observations_since_last_state > 0 and self.world_state.is_mission_running):
                 # print("Got " + str(self.world_state.number_of_observations_since_last_state) + " observations since last state.")
+                # msg = self.world_state.observations[-1].text
+                # print(msg)
+                # print(self.world_state)
+                # ob = json.loads(msg)
+                # current_yaw_delta = ob.get(u'yawDelta', 0)
+                # current_speed = (1 - abs(current_yaw_delta))
                 try:
                     # for command in self.action_dict[action]:
                     #     self.agent_host.sendCommand(self.action_dict[action])
+
+                    # self.agent_host.sendCommand("move " + str(current_speed))
+                    # self.agent_host.sendCommand("turn " + str(current_yaw_delta))
+
                     self.agent_host.sendCommand(self.action_dict[action])
-                    # print('Took action ' + self.action_dict[action])
+
                     for reward in self.world_state.rewards:
                         current_reward += reward.getValue()
-                    # if(current_reward>0):
-                        # print('reward ::: '+str(current_reward))
+                    # print('reward ::: '+str(current_reward))
                     while self.world_state.number_of_video_frames_since_last_state < 1 and self.world_state.is_mission_running:
                         time.sleep(0.05)
                         self.world_state = self.agent_host.getWorldState()
