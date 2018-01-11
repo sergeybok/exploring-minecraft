@@ -28,11 +28,11 @@ endE = 0.05  # Final chance of random action
 annealing_steps = 7000  # How many steps of training to reduce startE to endE.
 batch_size_deconv_compressor = 10
 intrinsic_reward_rescaling_factor = 100
-num_episodes = 2  # How many episodes of game environment to train network with.
+num_episodes = 3  # How many episodes of game environment to train network with.
 if(use_complete_random_agent):
     update_freq_per_episodes = num_episodes # How often to perform a training step.
 else:
-    update_freq_per_episodes = 1  # How often to perform a training step.
+    update_freq_per_episodes = 25  # How often to perform a training step.
 pre_train_steps = 100  # How many steps of random actions before training begins.
 max_actions_per_episode = 160  # The max allowed length of our episode.
 load_model = False  # Whether to load a saved model.
@@ -421,6 +421,13 @@ for episode_num in range(num_episodes):
     if(episode_num % model_saving_freq == 0 and episode_num>0):
         saver.save(sess, path_Complete_Network + '/model-' + str(episode_num) + '.ckpt')
         print("Saved Model after episode : "+str(episode_num))
+
+        reward_per_episode_list = np.array(reward_per_episode_list)
+        results_file_name = './curiosity_model/DQN_results_after_epsiode_'+str(episode_num+1)+'.pickle'
+        fp = open(results_file_name, 'wb')
+        results_dict = {'reward_per_episode_list': reward_per_episode_list, 'mean_reward_per_episode_window_list': mean_reward_per_episode_window_list, 'steps_taken_per_episode_list': steps_taken_per_episode_list}
+        pickle.dump(results_dict, fp)
+        fp.close()
     if len(reward_per_episode_list) % 10 == 0:
         print('Total steps taken till now, mean reward per episode, current epsilon :::::: ')
         print(str(total_steps)+', '+str(np.mean(reward_per_episode_list))+', '+str(e))
@@ -442,7 +449,7 @@ rMean = np.average(reward_per_episode_list)
 print('Mean reward is '+str(rMean))
 
 results_file_name = './curiosity_model/DQN_results.pickle'
-fp = open(results_file_name, 'w')
+fp = open(results_file_name, 'wb')
 results_dict = {'reward_per_episode_list':reward_per_episode_list, 'mean_reward_per_episode_window_list':mean_reward_per_episode_window_list, 'steps_taken_per_episode_list':steps_taken_per_episode_list}
 pickle.dump(results_dict, fp)
 fp.close()
