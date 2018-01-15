@@ -8,6 +8,8 @@ import pickle
 import time
 import datetime
 import sys
+import cv2
+from scipy import misc 
 
 import Perception
 import Reward
@@ -27,8 +29,13 @@ startE = 0.5  # Starting chance of random action
 endE = 0.05  # Final chance of random action
 annealing_steps = 7000  # How many steps of training to reduce startE to endE.
 batch_size_deconv_compressor = 10
+<<<<<<< HEAD
 intrinsic_reward_rescaling_factor = 100
 num_episodes = 3  # How many episodes of game environment to train network with.
+=======
+intrinsic_reward_rescaling_factor = 10
+num_episodes = 1300  # How many episodes of game environment to train network with.
+>>>>>>> Some final parameter changes, adding some results
 if(use_complete_random_agent):
     update_freq_per_episodes = num_episodes # How often to perform a training step.
 else:
@@ -36,7 +43,7 @@ else:
 pre_train_steps = 100  # How many steps of random actions before training begins.
 max_actions_per_episode = 160  # The max allowed length of our episode.
 load_model = False  # Whether to load a saved model.
-path_Complete_Network = "./curiosity_model/complete_model"  # The path to save our model to.
+path_Complete_Network = "./curiosity_model/intinsic_model"  # The path to save our model to.
 # path_Frame_Predictor = "./curiosity_model/frame_predictor_model"  # The path to save our model to.
 model_saving_freq = 50
 # h_size = 512  # The size of the final convolutional layer before splitting it into Advantage and Value streams.
@@ -359,6 +366,12 @@ for episode_num in range(num_episodes):
             intrinsic_r = curiosity.get_reward(predictions_t=pred_t,predictions_tm1=pred_tm1,targets=state_tp1)
             intrinsic_r = intrinsic_r * intrinsic_reward_rescaling_factor
 
+            # save samples 
+            for i in range(10):
+                cur_img = pred_t[i]
+                #cv2.imwrite(('frames/deconv_{0}.png'.format(i)),cur_img.reshape(84,84,3)*255)
+                #cv2.imwrite(('frames/deconv_{0}.png'.format(i)), cv2.cvtColor(cur_img, cv2.COLOR_RGB2BGR))
+                misc.imsave(('frames/deconv_{0}.png'.format(i)),cur_img.reshape(84,84,3)*255)
             curr_batch = episodeBuffer.buffer[i * batch_size_deconv_compressor:(i + 1) * batch_size_deconv_compressor]
             for list_index in range(len(curr_batch)):
                 curr_batch[list_index][2] += intrinsic_r
@@ -431,6 +444,12 @@ for episode_num in range(num_episodes):
     if len(reward_per_episode_list) % 10 == 0:
         print('Total steps taken till now, mean reward per episode, current epsilon :::::: ')
         print(str(total_steps)+', '+str(np.mean(reward_per_episode_list))+', '+str(e))
+        results_file_name = './curiosity_model/DQN_results.pkl'
+        fp = open(results_file_name, 'wb')
+        results_dict = {'reward_per_episode_list':reward_per_episode_list, 'mean_reward_per_episode_window_list':mean_reward_per_episode_window_list, 'steps_taken_per_episode_list':steps_taken_per_episode_list}
+        pickle.dump(results_dict, fp)
+        fp.close()
+
 
 end_episode_time = time.time()
 duration = end_episode_time-start_time

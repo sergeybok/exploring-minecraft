@@ -19,7 +19,7 @@ class environment():
         self.error_margin_in_reaching_goal_position = 1.0
         self.every_action_penalty = 0.0
         self.maze_size = 10
-        self.episode_time_limit = 8000
+        self.episode_time_limit = 7000
         self.camera_position = 0 #The camera position to use. 0 = first person, 1 = behind, 2 = facing.
         self.port_number = port_number
 
@@ -188,7 +188,7 @@ class environment():
             <AgentSection mode="Survival">
                 <Name>LSD Curiosity</Name>
                 <AgentStart>
-                    <Placement x="-204" y="81" z="217" yaw="-40" pitch="30"/>
+                    <Placement x="-204" y="81" z="217" yaw="-40" pitch="25"/>
                 </AgentStart>
                 <AgentHandlers>
                     <ObservationFromFullStats/>
